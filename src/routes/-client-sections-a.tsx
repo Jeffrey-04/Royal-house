@@ -734,7 +734,7 @@ export function CartPanel({ cart, updateQty, removeFromCart, clearCart, userId, 
           </div>
         </div>
 
-        <Button className="w-full" size="sm" onClick={confirmPayment}>
+        <Button className="w-full" size="sm" onClick={confirmPayment} disabled={!coords || geoState === "geocoding"}>
           <CreditCard className="h-3.5 w-3.5 mr-1.5" />
           Confirmer le paiement — {formatFCFA(total)}
         </Button>

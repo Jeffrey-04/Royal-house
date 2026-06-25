@@ -23,7 +23,7 @@ import omUrl   from "@/assets/OM.png?url";
 // ——————————————————————————————————————————————
 type OrderRow = {
   id: string; status: OrderStatus; total: string | number | null;
-  items: CartItem[] | null; created_at: string;
+  items: CartItem[] | null; created_at: string; payment_status: string | null;
 };
 type ProfileRow = { full_name: string | null; phone: string | null } | null | undefined;
 
@@ -170,7 +170,7 @@ export function SectionRecompenses({ userId }: { userId: string }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("orders")
-        .select("id, total, status, created_at, items")
+        .select("id, total, status, created_at, items, payment_status")
         .eq("client_id", userId)
         .order("created_at", { ascending: false });
       return (data ?? []) as OrderRow[];
@@ -178,7 +178,7 @@ export function SectionRecompenses({ userId }: { userId: string }) {
   });
 
   const { points, totalSpent } = useMemo(() => {
-    const delivered = orders.filter(o => o.status === "delivered");
+    const delivered = orders.filter(o => o.status === "delivered" && o.payment_status === "released");
     const totalSpent = delivered.reduce((s, o) => s + Number(o.total), 0);
     return { points: Math.floor(totalSpent / 100), totalSpent };
   }, [orders]);
@@ -189,7 +189,7 @@ export function SectionRecompenses({ userId }: { userId: string }) {
     : Math.min(100, Math.round(((points - (level.label === "Or" ? 1000 : level.label === "Argent" ? 500 : 0)) /
         (level.next - (level.label === "Or" ? 1000 : level.label === "Argent" ? 500 : 0))) * 100));
 
-  const deliveredOrders = orders.filter(o => o.status === "delivered").slice(0, 10);
+  const deliveredOrders = orders.filter(o => o.status === "delivered" && o.payment_status === "released").slice(0, 10);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
@@ -325,7 +325,7 @@ export function SectionPaiements({ userId }: { userId: string }) {
   const { totalSpent, released, held } = useMemo(() => {
     const total = orders.reduce((s, o) => s + Number(o.total), 0);
     const released = orders.filter(o => o.payment_status === "released").reduce((s, o) => s + Number(o.total), 0);
-    const held = orders.filter(o => o.payment_status === "held").reduce((s, o) => s + Number(o.total), 0);
+    const held = orders.filter(o => !o.payment_status || o.payment_status === "held").reduce((s, o) => s + Number(o.total), 0);
     return { totalSpent: total, released, held };
   }, [orders]);
 

@@ -444,6 +444,9 @@ function SectionLive({ userId }: { userId: string }) {
   const locById    = useMemo(() => new Map(myLocations.map(l => [l.order_id, l])), [myLocations]);
   const selectedOrder = orders.find(o => o.id === selected);
 
+  // ID stable de la commande en cours de livraison (évite TDZ dans le useEffect GPS)
+  const deliveringOrderId = orders.find(o => o.status === "delivering" && o.courier_id === userId)?.id ?? null;
+
   // Realtime orders — son quand une nouvelle commande devient disponible
   const prevAvailableCount = useRef(0);
   useEffect(() => {
@@ -454,7 +457,16 @@ function SectionLive({ userId }: { userId: string }) {
         queryClient.invalidateQueries({ queryKey: ["courier-active-count", userId] });
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    // Fallback poll si WebSocket down
+    const poll = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["courier-live", userId] });
+    }, 30_000);
+
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(poll);
+    };
   }, [userId, queryClient]);
 
   // Son si nouvelles commandes disponibles
@@ -468,8 +480,7 @@ function SectionLive({ userId }: { userId: string }) {
 
   // GPS réel via watchPosition — active uniquement pendant une livraison en cours
   useEffect(() => {
-    const delivering = orders.find(o => o.status === "delivering" && o.courier_id === userId);
-    if (!delivering) {
+    if (!deliveringOrderId) {
       if (watchRef.current !== null) {
         navigator.geolocation?.clearWatch(watchRef.current);
         watchRef.current = null;
@@ -482,14 +493,14 @@ function SectionLive({ userId }: { userId: string }) {
       async (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
         await supabase.from("courier_locations").upsert({
-          order_id: delivering.id,
+          order_id: deliveringOrderId,
           courier_id: userId,
           lat,
           lng,
           updated_at: new Date().toISOString(),
         });
       },
-      () => { /* permission refusée ou GPS indisponible */ },
+      () => {},
       { enableHighAccuracy: true, maximumAge: 5000 },
     );
     return () => {
@@ -498,7 +509,7 @@ function SectionLive({ userId }: { userId: string }) {
         watchRef.current = null;
       }
     };
-  }, [orders, userId]);
+  }, [deliveringOrderId, userId]);
 
   // Calcul de l'itinéraire Mapbox dès qu'une course est sélectionnée (et m'appartient)
   useEffect(() => {
@@ -535,18 +546,22 @@ function SectionLive({ userId }: { userId: string }) {
   const markers: MapMarker[] = useMemo(() => {
     const m: MapMarker[] = [];
     orders.forEach(o => {
-      const isMine = o.courier_id === userId;
       // Afficher le point de livraison (destination) pour toutes les commandes disponibles
       if (Number.isFinite(Number(o.dropoff_lat)) && Number.isFinite(Number(o.dropoff_lng)))
         m.push({ id: `drop-${o.id}`, lat: Number(o.dropoff_lat), lng: Number(o.dropoff_lng), kind: "dropoff", label: o.dropoff_address });
-      // Position GPS du livreur uniquement pour ses propres courses
-      if (isMine) {
-        const loc = locById.get(o.id);
-        if (loc) m.push({ id: `me-${o.id}`, lat: loc.lat, lng: loc.lng, kind: "courier", label: "Vous", pulse: true, vehicle });
-      }
     });
+    // UN SEUL marqueur livreur basé sur la position GPS la plus récente
+    const myLocs = myOrders
+      .map(o => locById.get(o.id))
+      .filter((loc): loc is NonNullable<typeof loc> => !!loc);
+    if (myLocs.length > 0) {
+      const latest = myLocs.reduce((a, b) =>
+        (a.updated_at ?? "") >= (b.updated_at ?? "") ? a : b
+      );
+      m.push({ id: "me", lat: latest.lat, lng: latest.lng, kind: "courier", label: "Vous", pulse: true, vehicle });
+    }
     return m;
-  }, [orders, locById, userId]);
+  }, [orders, locById, myOrders, vehicle]);
 
   const acceptOrder = async (orderId: string, pickupLat: number, pickupLng: number) => {
     const { data: accepted, error } = await supabase.rpc("accept_order", {

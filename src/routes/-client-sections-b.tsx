@@ -313,7 +313,16 @@ export function SectionSuivi({ userId }: { userId: string }) {
         () => queryClient.invalidateQueries({ queryKey: ["client-active-orders", userId] })
       )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    // Fallback poll si WebSocket down
+    const poll = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["client-active-orders", userId] });
+    }, 30_000);
+
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(poll);
+    };
   }, [userId, queryClient]);
 
   // Calcul itinéraire : depuis la position du livreur (ou restaurant si pas encore en route) → client
@@ -467,8 +476,8 @@ export function SectionSuivi({ userId }: { userId: string }) {
           })}
         </div>
 
-        {/* Bouton "Marquer reçu" — visible quand livreur est en route ou a confirmé la livraison */}
-        {(["picked_up", "delivering"].includes(activeOrder.status) ||
+        {/* Bouton "Marquer reçu" — visible uniquement en livraison active ou après confirmation livreur */}
+        {(activeOrder.status === "delivering" ||
           (activeOrder.status === "delivered" && activeOrder.payment_status !== "released")) && (
           <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-3">
             <div className="flex items-start gap-2">
