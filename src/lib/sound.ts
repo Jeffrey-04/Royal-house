@@ -1,14 +1,15 @@
 /**
  * Notification sonore.
- * Utilise un fichier MP3 si disponible dans /public/notification.mp3,
+ * Utilise le fichier WAV bundlé par Vite,
  * sinon génère un bip court via Web Audio API.
  */
 
+import notificationUrl from "../assets/sounds/notification.wav?url";
+
 let audio: HTMLAudioElement | null = null;
 
-// Tente de précharger le fichier fourni par l'utilisateur
 if (typeof window !== "undefined") {
-  const a = new Audio("/notification.mp3");
+  const a = new Audio(notificationUrl);
   a.preload = "auto";
   a.volume = 0.6;
   a.addEventListener("canplaythrough", () => { audio = a; }, { once: true });
