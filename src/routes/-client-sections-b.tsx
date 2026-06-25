@@ -25,6 +25,7 @@ type OrderRow = {
   items: CartItem[] | null; dropoff_address: string | null;
   dropoff_lat: number | null; dropoff_lng: number | null;
   courier_id: string | null; created_at: string;
+  payment_status: string | null;
 };
 
 // ——————————————————————————————————————————————
@@ -60,7 +61,7 @@ export function SectionCommandes({ userId, onSuivi }: { userId: string; onSuivi:
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, status, total, items, dropoff_address, dropoff_lat, dropoff_lng, courier_id, created_at")
+        .select("id, status, total, items, dropoff_address, dropoff_lat, dropoff_lng, courier_id, created_at, payment_status")
         .eq("client_id", userId)
         .order("created_at", { ascending: false })
         .limit(40);
@@ -79,8 +80,9 @@ export function SectionCommandes({ userId, onSuivi }: { userId: string; onSuivi:
     return () => { supabase.removeChannel(ch); };
   }, [userId, queryClient]);
 
-  const active = orders.filter(o => !["delivered", "cancelled"].includes(o.status));
-  const history = orders.filter(o => ["delivered", "cancelled"].includes(o.status));
+  // "delivered" sans confirmation client reste dans les actives jusqu'à payment_status = "released"
+  const active  = orders.filter(o => o.status !== "cancelled" && !(o.status === "delivered" && o.payment_status === "released"));
+  const history = orders.filter(o => o.status === "cancelled" || (o.status === "delivered" && o.payment_status === "released"));
 
   if (isLoading) {
     return (
@@ -109,7 +111,7 @@ export function SectionCommandes({ userId, onSuivi }: { userId: string; onSuivi:
           <h2 className="font-bold text-lg flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />En cours ({active.length})
           </h2>
-          {active.map(o => <ActiveOrderCard key={o.id} order={o} onSuivi={onSuivi} />)}
+          {active.map(o => <ActiveOrderCard key={o.id} order={o} userId={userId} onSuivi={onSuivi} />)}
         </section>
       )}
       {history.length > 0 && (
@@ -124,10 +126,27 @@ export function SectionCommandes({ userId, onSuivi }: { userId: string; onSuivi:
   );
 }
 
-function ActiveOrderCard({ order, onSuivi }: { order: OrderRow; onSuivi: () => void }) {
+function ActiveOrderCard({ order, userId, onSuivi }: { order: OrderRow; userId: string; onSuivi: () => void }) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
   const progress = statusProgress(order.status);
+  const needsConfirmation = order.status === "delivered" && order.payment_status !== "released";
+
+  async function handleConfirm() {
+    setConfirming(true);
+    const { error } = await supabase
+      .from("orders")
+      .update({ payment_status: "released" } as never)
+      .eq("id", order.id)
+      .eq("client_id", userId);
+    setConfirming(false);
+    if (error) { toast.error("Erreur lors de la confirmation."); return; }
+    toast.success("Commande confirmée ! Paiement libéré. Bon appétit 🎉");
+    queryClient.invalidateQueries({ queryKey: ["client-orders", userId] });
+  }
+
   return (
-    <div className="rounded-2xl border bg-card p-4 space-y-3">
+    <div className={`rounded-2xl border bg-card p-4 space-y-3 ${needsConfirmation ? "border-green-300 ring-1 ring-green-200" : ""}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-sm truncate">{itemsSummary(order.items)}</p>
@@ -151,9 +170,28 @@ function ActiveOrderCard({ order, onSuivi }: { order: OrderRow; onSuivi: () => v
         </div>
         <div className="flex justify-between text-xs text-muted-foreground">
           <span>{progress}% complété</span>
-          <button onClick={onSuivi} className="text-primary hover:underline">Voir sur la carte →</button>
+          {!needsConfirmation && (
+            <button onClick={onSuivi} className="text-primary hover:underline">Voir sur la carte →</button>
+          )}
         </div>
       </div>
+      {needsConfirmation && (
+        <div className="rounded-xl bg-green-50 border border-green-200 p-3 space-y-2">
+          <div className="flex items-start gap-2">
+            <PartyPopper className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+            <p className="text-sm font-semibold text-green-800">Votre commande a été livrée !</p>
+          </div>
+          <p className="text-xs text-green-700">Confirmez la réception pour libérer le paiement.</p>
+          <Button
+            size="sm" className="w-full bg-green-600 hover:bg-green-700 text-white"
+            disabled={confirming} onClick={handleConfirm}
+          >
+            {confirming
+              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Confirmation…</>
+              : <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />J'ai reçu ma commande</>}
+          </Button>
+        </div>
+      )}
       <div className="flex justify-between items-center pt-1 border-t text-sm">
         <span className="text-muted-foreground">
           {new Date(order.created_at).toLocaleString("fr-FR", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" })}
@@ -201,7 +239,7 @@ export function SectionSuivi({ userId }: { userId: string }) {
     setConfirmingReceived(true);
     const { error } = await supabase
       .from("orders")
-      .update({ status: "delivered", payment_status: "released" } as never)
+      .update({ payment_status: "released" } as never)
       .eq("id", orderId)
       .eq("client_id", userId);
     setConfirmingReceived(false);
@@ -218,9 +256,11 @@ export function SectionSuivi({ userId }: { userId: string }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("orders")
-        .select("id, status, total, items, dropoff_address, dropoff_lat, dropoff_lng, courier_id, created_at")
+        .select("id, status, total, items, dropoff_address, dropoff_lat, dropoff_lng, courier_id, created_at, payment_status")
         .eq("client_id", userId)
-        .not("status", "in", "(delivered,cancelled)")
+        .not("status", "eq", "cancelled")
+        // inclure "delivered" tant que le client n'a pas confirmé
+        .or("status.neq.delivered,payment_status.neq.released")
         .order("created_at", { ascending: false });
       return (data ?? []) as OrderRow[];
     },
@@ -296,12 +336,15 @@ export function SectionSuivi({ userId }: { userId: string }) {
 
   const markers = useMemo<MapMarker[]>(() => {
     const result: MapMarker[] = [];
-    if (restaurant?.lat && restaurant?.lng)
+    const isDelivering = activeOrder?.status === "delivering" || activeOrder?.status === "delivered";
+    // Afficher le restaurant seulement avant que le livreur soit en route
+    if (!isDelivering && restaurant?.lat && restaurant?.lng)
       result.push({ id: "restaurant", kind: "restaurant", lat: restaurant.lat, lng: restaurant.lng });
     if (activeOrder?.dropoff_lat && activeOrder?.dropoff_lng)
       result.push({ id: "dropoff", kind: "dropoff", lat: activeOrder.dropoff_lat, lng: activeOrder.dropoff_lng });
+    // Position du livreur en priorité quand il est en route
     if (courierLoc?.lat && courierLoc?.lng)
-      result.push({ id: "courier", kind: "courier", lat: courierLoc.lat, lng: courierLoc.lng });
+      result.push({ id: "courier", kind: "courier", lat: courierLoc.lat, lng: courierLoc.lng, pulse: true });
     return result;
   }, [restaurant, activeOrder, courierLoc]);
 
@@ -422,13 +465,16 @@ export function SectionSuivi({ userId }: { userId: string }) {
           })}
         </div>
 
-        {/* Bouton "Marquer reçu" — visible quand le livreur est en route */}
-        {["picked_up", "delivering"].includes(activeOrder.status) && (
+        {/* Bouton "Marquer reçu" — visible quand livreur est en route ou a confirmé la livraison */}
+        {(["picked_up", "delivering"].includes(activeOrder.status) ||
+          (activeOrder.status === "delivered" && activeOrder.payment_status !== "released")) && (
           <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-3">
             <div className="flex items-start gap-2">
               <PartyPopper className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-green-800">Votre commande arrive !</p>
+                <p className="text-sm font-semibold text-green-800">
+                {activeOrder.status === "delivered" ? "Votre commande a été livrée !" : "Votre commande arrive !"}
+              </p>
                 <p className="text-xs text-green-700 mt-0.5">
                   Confirmez la réception pour libérer le paiement au restaurant et au livreur.
                 </p>
