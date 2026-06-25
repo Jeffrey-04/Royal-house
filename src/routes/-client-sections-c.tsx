@@ -5,6 +5,7 @@ import {
   Bell, CheckCircle2, Clock, Package, Bike, ChefHat,
   Star, Gift, TrendingUp, CreditCard,
   User, Phone, Mail, LogOut, Pencil, Check, X, Receipt, Lock, Unlock,
+  MapPin, ArrowRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -437,10 +438,12 @@ export function SectionPaiements({ userId }: { userId: string }) {
 // ——————————————————————————————————————————————
 // SectionProfil
 // ——————————————————————————————————————————————
-export function SectionProfil({ user, profile, onSignOut }: {
+export function SectionProfil({ user, profile, onSignOut, onPaiements, onSuivi }: {
   user: SupabaseUser;
   profile: ProfileRow;
   onSignOut: () => void;
+  onPaiements?: () => void;
+  onSuivi?: () => void;
 }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -544,6 +547,37 @@ export function SectionProfil({ user, profile, onSignOut }: {
           </Button>
         )}
       </div>
+
+      {/* Quick links (mobile only) */}
+      {(onPaiements || onSuivi) && (
+        <div className="md:hidden rounded-2xl border bg-card p-4 space-y-2">
+          <h3 className="font-semibold text-sm mb-3">Accès rapide</h3>
+          {onPaiements && (
+            <button
+              onClick={onPaiements}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <CreditCard className="h-5 w-5 text-primary" />
+                <span className="text-sm font-medium">Paiements</span>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+          {onSuivi && (
+            <button
+              onClick={onSuivi}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <MapPin className="h-5 w-5 text-primary" />
+                <span className="text-sm font-medium">Suivi en direct</span>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Danger zone */}
       <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 space-y-3">

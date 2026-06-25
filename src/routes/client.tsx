@@ -181,7 +181,7 @@ function ClientPage() {
               {section === "recompenses" && <SectionRecompenses userId={user.id} />}
               {section === "notifications" && <SectionNotifications userId={user.id} />}
               {section === "paiements" && <SectionPaiements userId={user.id} />}
-              {section === "profil" && <SectionProfil user={user} profile={profile} onSignOut={handleSignOut} />}
+              {section === "profil" && <SectionProfil user={user} profile={profile} onSignOut={handleSignOut} onPaiements={() => goSection("paiements")} onSuivi={() => goSection("suivi")} />}
             </>
           )}
         </main>
@@ -198,7 +198,7 @@ const BOTTOM_NAV_CLIENT: Array<{ id: ClientSection; icon: LucideIcon; label: str
   { id: "accueil",   icon: LayoutDashboard, label: "Accueil" },
   { id: "commander", icon: UtensilsCrossed, label: "Menu" },
   { id: "commandes", icon: ShoppingBag,     label: "Commandes" },
-  { id: "suivi",     icon: MapPin,          label: "Suivi" },
+  { id: "recompenses", icon: Gift,           label: "Récompenses" },
   { id: "profil",    icon: User,            label: "Profil" },
 ];
 
