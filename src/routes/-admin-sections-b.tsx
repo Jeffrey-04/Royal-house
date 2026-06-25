@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MapPin, ChevronLeft, ChevronRight, Plus, Trash2, Pencil, Check, X, Navigation, ImagePlus, Loader2, Utensils } from "lucide-react";
+import { MapPin, ChevronLeft, ChevronRight, Plus, Trash2, Pencil, Check, X, Navigation, ImagePlus, Loader2, Utensils, Search } from "lucide-react";
 import { fetchRoute, formatDist, formatDuration, type RouteData } from "@/lib/mapbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +9,25 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MapView } from "@/components/MapView";
 import type { MapMarker } from "@/components/MapView";
 import { supabase } from "@/integrations/supabase/client";
 import { formatFCFA, ROYAL_HOUSE_ID, STATUS_LABEL, STATUS_COLOR } from "@/lib/orders";
 import type { OrderStatus } from "@/lib/orders";
+
+// Catégories prédéfinies pour le menu
+const MENU_CATEGORIES = [
+  "Plats signatures",
+  "Grillades",
+  "Sauces & ragoûts",
+  "Accompagnements",
+  "Entrées & salades",
+  "Soupes & bouillons",
+  "Boissons",
+  "Desserts",
+  "Autre",
+];
 
 // ---------------------------------------------------------------------------
 // Helpers locaux
@@ -564,11 +578,28 @@ function MenuItemForm({
           </div>
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">Catégorie</Label>
-            <Input
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              placeholder="Plats signatures, Boissons…"
-            />
+            <Select
+              value={MENU_CATEGORIES.includes(category) ? category : "Autre"}
+              onValueChange={val => setCategory(val)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Choisir…" />
+              </SelectTrigger>
+              <SelectContent>
+                {MENU_CATEGORIES.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* Champ libre si "Autre" */}
+            {(!MENU_CATEGORIES.includes(category) || category === "Autre") && (
+              <Input
+                value={category === "Autre" ? "" : category}
+                onChange={e => setCategory(e.target.value || "Autre")}
+                placeholder="Précisez la catégorie…"
+                className="mt-1.5 h-8 text-sm"
+              />
+            )}
           </div>
         </div>
 
@@ -856,91 +887,140 @@ export function SectionMenu() {
 export function SectionHistorique() {
   const [search, setSearch] = useState("");
 
-  const { data: orders } = useQuery({
+  // 1. Commandes livrées/annulées
+  const { data: orders = [] } = useQuery({
     queryKey: ["admin-history"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("*, profiles!orders_client_id_fkey(full_name, phone)")
+        .select("id, status, total, created_at, dropoff_address, client_id, items")
         .eq("restaurant_id", ROYAL_HOUSE_ID)
         .in("status", ["delivered", "cancelled"])
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as Array<{
+        id: string; status: string; total: number | null;
+        created_at: string; dropoff_address: string | null;
+        client_id: string; items: any;
+      }>;
     },
   });
 
-  const filtered = useMemo(
-    () =>
-      (orders ?? []).filter((o) => {
-        if (!search.trim()) return true;
-        const s = search.toLowerCase();
-        return (
-          o.id.toLowerCase().startsWith(s) ||
-          ((o as any).profiles?.full_name ?? "").toLowerCase().includes(s) ||
-          o.dropoff_address.toLowerCase().includes(s)
-        );
-      }),
-    [orders, search],
-  );
+  // 2. Profils des clients (jointure manuelle : client_id → profiles.id)
+  const clientIds = useMemo(() => [...new Set(orders.map(o => o.client_id))], [orders]);
+
+  const { data: profilesMap = {} } = useQuery({
+    queryKey: ["admin-history-profiles", clientIds],
+    enabled: clientIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, phone")
+        .in("id", clientIds);
+      if (error) throw error;
+      return Object.fromEntries((data ?? []).map(p => [p.id, p])) as Record<
+        string, { id: string; full_name: string | null; phone: string | null }
+      >;
+    },
+  });
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return orders;
+    const s = search.toLowerCase();
+    return orders.filter(o => {
+      const name = profilesMap[o.client_id]?.full_name ?? "";
+      return (
+        o.id.toLowerCase().startsWith(s) ||
+        name.toLowerCase().includes(s) ||
+        (o.dropoff_address ?? "").toLowerCase().includes(s)
+      );
+    });
+  }, [orders, profilesMap, search]);
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-6 space-y-5 max-w-4xl mx-auto">
+      {/* En-tête */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Historique</h2>
-        <p className="text-sm text-muted-foreground">
-          {filtered.length} résultat{filtered.length !== 1 ? "s" : ""}
-        </p>
+        <div>
+          <h2 className="text-2xl font-bold">Historique</h2>
+          <p className="text-sm text-muted-foreground">
+            {orders.length} commande{orders.length !== 1 ? "s" : ""} terminées
+          </p>
+        </div>
       </div>
-      <Input
-        placeholder="Rechercher par ID, client ou adresse…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-sm"
-      />
+
+      {/* Recherche */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="ID, nom client ou adresse…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9"
+        />
+      </div>
+
+      {/* Liste */}
       <div className="space-y-2">
         {filtered.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Aucun résultat</p>
+          <div className="py-16 text-center text-sm text-muted-foreground">
+            {search ? "Aucun résultat pour cette recherche." : "Aucune commande terminée pour le moment."}
+          </div>
         ) : (
-          filtered.map((o) => (
-            <div
-              key={o.id}
-              className="flex items-center gap-3 rounded-xl border bg-card p-3 hover:bg-muted/30 transition-colors"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-semibold">
-                    #{o.id.slice(0, 6).toUpperCase()}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(o.created_at).toLocaleDateString("fr-FR", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
+          filtered.map(o => {
+            const profile = profilesMap[o.client_id];
+            const items = Array.isArray(o.items) ? o.items as Array<{ name: string; qty: number }> : [];
+            return (
+              <div
+                key={o.id}
+                className="flex items-start gap-4 rounded-xl border bg-card p-4 hover:bg-muted/20 transition-colors"
+              >
+                {/* Infos principales */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-mono font-bold bg-muted px-2 py-0.5 rounded">
+                      #{o.id.slice(0, 8).toUpperCase()}
+                    </span>
+                    <Badge className={`${statusColor(o.status as OrderStatus)} text-[10px]`}>
+                      {statusLabel(o.status as OrderStatus)}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(o.created_at).toLocaleDateString("fr-FR", {
+                        day: "numeric", month: "short", year: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium">
+                    {profile?.full_name ?? "Client inconnu"}
+                    {profile?.phone && (
+                      <span className="text-xs text-muted-foreground font-normal ml-2">{profile.phone}</span>
+                    )}
+                  </p>
+                  {o.dropoff_address && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{o.dropoff_address}</span>
+                    </p>
+                  )}
+                  {items.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {items.slice(0, 3).map(i => `${i.name} ×${i.qty}`).join(" · ")}
+                      {items.length > 3 && ` · +${items.length - 3} autre${items.length - 3 > 1 ? "s" : ""}`}
+                    </p>
+                  )}
                 </div>
-                <p className="text-sm mt-0.5">
-                  {(o as any).profiles?.full_name ?? "Client inconnu"}
-                </p>
-                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                  <MapPin className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{o.dropoff_address}</span>
-                </p>
+
+                {/* Montant */}
+                <div className="shrink-0 text-right">
+                  <p className="text-base font-bold text-primary">
+                    {formatFCFA(Number(o.total ?? 0))}
+                  </p>
+                </div>
               </div>
-              <div className="shrink-0 text-right">
-                <Badge className={`${statusColor(o.status as any)} text-[10px] mb-1`}>
-                  {statusLabel(o.status as any)}
-                </Badge>
-                <p className="text-sm font-semibold">
-                  {formatFCFA(Number(o.total ?? 0))}
-                </p>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
