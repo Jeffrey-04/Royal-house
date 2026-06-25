@@ -298,7 +298,31 @@ export function SectionSuivi({
     refetchInterval: 4_000,
   });
 
+  // Profils clients pour les commandes actives (jointure manuelle : pas de FK orders→profiles)
+  const activeClientIds = useMemo(
+    () => [...new Set(activeOrders.map((o) => o.client_id).filter(Boolean))],
+    [activeOrders],
+  );
+  const { data: activeProfilesMap = {} } = useQuery({
+    queryKey: ["admin-active-profiles", activeClientIds],
+    enabled: activeClientIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, full_name, phone")
+        .in("id", activeClientIds);
+      return Object.fromEntries((data ?? []).map((p) => [p.id, p])) as Record<
+        string,
+        { id: string; full_name: string | null; phone: string | null }
+      >;
+    },
+  });
+
   const selectedOrder = activeOrders.find((o) => o.id === selectedId) ?? null;
+  const selectedOrderWithProfile = selectedOrder
+    ? { ...selectedOrder, profiles: activeProfilesMap[selectedOrder.client_id] ?? null }
+    : null;
   const locById = useMemo(
     () => new Map((courierLocs as any[]).map((cl) => [cl.order_id, cl])),
     [courierLocs],
@@ -354,7 +378,7 @@ export function SectionSuivi({
       <div className="absolute right-4 top-4 z-10 w-80 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-2xl border bg-card/95 backdrop-blur-sm shadow-lg">
         {selectedOrder ? (
           <OrderDetailPanel
-            order={selectedOrder}
+            order={selectedOrderWithProfile}
             route={route}
             orders={activeOrders}
             currentIdx={activeOrders.findIndex(o => o.id === selectedId)}

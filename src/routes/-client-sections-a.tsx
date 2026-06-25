@@ -734,6 +734,11 @@ export function CartPanel({ cart, updateQty, removeFromCart, clearCart, userId, 
           </div>
         </div>
 
+        {(!coords || geoState === "geocoding") && (
+          <p className="text-xs text-amber-600 text-center">
+            {geoState === "geocoding" ? "Localisation de l'adresse…" : "Veuillez valider une adresse de livraison."}
+          </p>
+        )}
         <Button className="w-full" size="sm" onClick={confirmPayment} disabled={!coords || geoState === "geocoding"}>
           <CreditCard className="h-3.5 w-3.5 mr-1.5" />
           Confirmer le paiement — {formatFCFA(total)}
