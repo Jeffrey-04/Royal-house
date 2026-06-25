@@ -95,7 +95,7 @@ function CourierPage() {
       <CourierSidebar section={section} setSection={setSection} onSignOut={handleSignOut} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <CourierHeader user={user} section={section} />
-        <main className={`flex-1 ${section === "live" ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
+        <main className={`flex-1 ${section === "live" ? "overflow-hidden flex flex-col" : "overflow-y-auto"} pb-24 md:pb-0`}>
           {!sessionReady ? (
             <div className="flex items-center justify-center h-full text-muted-foreground gap-2">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -111,8 +111,52 @@ function CourierPage() {
             </>
           )}
         </main>
+        <CourierBottomNav section={section} setSection={setSection} />
       </div>
     </div>
+  );
+}
+
+// ============ BOTTOM NAVBAR (mobile) ============
+
+const BOTTOM_NAV_COURIER: { id: CourierSection; icon: typeof Bike; label: string }[] = [
+  { id: "dashboard",   icon: LayoutDashboard, label: "Dashboard" },
+  { id: "live",        icon: ClipboardList,   label: "Courses" },
+  { id: "wallet",      icon: Wallet,          label: "Wallet" },
+  { id: "historique",  icon: History,         label: "Historique" },
+  { id: "profil",      icon: User,            label: "Profil" },
+];
+
+function CourierBottomNav({ section, setSection }: {
+  section: CourierSection;
+  setSection: (s: CourierSection) => void;
+}) {
+  return (
+    <nav className="
+      md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50
+      flex items-center gap-1
+      bg-neutral-900/70 backdrop-blur-2xl
+      border border-white/10
+      rounded-4xl px-2 py-2
+      shadow-[0_8px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]
+    ">
+      {BOTTOM_NAV_COURIER.map(item => {
+        const active = section === item.id;
+        return (
+          <button
+            key={item.id}
+            onClick={() => setSection(item.id)}
+            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-3xl transition-all duration-200
+              ${active
+                ? "bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
+                : "text-white/50 hover:text-white/75"}`}
+          >
+            <item.icon className="h-5 w-5" />
+            <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -132,7 +176,7 @@ function CourierSidebar({ section, setSection, onSignOut }: {
   onSignOut: () => void;
 }) {
   return (
-    <aside className="w-16 flex flex-col items-center py-4 border-r bg-card shrink-0">
+    <aside className="w-16 hidden md:flex flex-col items-center py-4 border-r bg-card shrink-0">
       <div className="mb-6">
         <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-sm">
           <Bike className="h-5 w-5 text-primary-foreground" />

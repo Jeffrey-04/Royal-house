@@ -156,7 +156,7 @@ function ClientPage() {
           onNotif={() => goSection("notifications")}
           onCart={() => goSection("commander")}
         />
-        <main className={`flex-1 ${section === "suivi" ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <main className={`flex-1 ${section === "suivi" ? "overflow-hidden" : "overflow-y-auto"} pb-24 md:pb-0`}>
           {!sessionReady ? (
             <div className="flex items-center justify-center h-full text-muted-foreground gap-2">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -185,8 +185,53 @@ function ClientPage() {
             </>
           )}
         </main>
+        <ClientBottomNav section={section} setSection={goSection} />
       </div>
     </div>
+  );
+}
+
+// ——————————————————————————————————————————————
+// Bottom navbar (mobile)
+// ——————————————————————————————————————————————
+const BOTTOM_NAV_CLIENT: Array<{ id: ClientSection; icon: LucideIcon; label: string }> = [
+  { id: "accueil",   icon: LayoutDashboard, label: "Accueil" },
+  { id: "commander", icon: UtensilsCrossed, label: "Menu" },
+  { id: "commandes", icon: ShoppingBag,     label: "Commandes" },
+  { id: "suivi",     icon: MapPin,          label: "Suivi" },
+  { id: "profil",    icon: User,            label: "Profil" },
+];
+
+function ClientBottomNav({ section, setSection }: {
+  section: ClientSection;
+  setSection: (s: ClientSection) => void;
+}) {
+  return (
+    <nav className="
+      md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50
+      flex items-center gap-1
+      bg-neutral-900/70 backdrop-blur-2xl
+      border border-white/10
+      rounded-4xl px-2 py-2
+      shadow-[0_8px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.08)]
+    ">
+      {BOTTOM_NAV_CLIENT.map(item => {
+        const active = section === item.id;
+        return (
+          <button
+            key={item.id}
+            onClick={() => setSection(item.id)}
+            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-3xl transition-all duration-200
+              ${active
+                ? "bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
+                : "text-white/50 hover:text-white/75"}`}
+          >
+            <item.icon className="h-5 w-5" />
+            <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -213,7 +258,7 @@ function ClientSidebar({ section, setSection, notifCount, onSignOut }: {
   onSignOut: () => void;
 }) {
   return (
-    <aside className="w-16 flex flex-col items-center py-4 border-r bg-card shrink-0">
+    <aside className="w-16 hidden md:flex flex-col items-center py-4 border-r bg-card shrink-0">
       <div className="mb-6">
         <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-sm">
           <Crown className="h-5 w-5 text-primary-foreground" />
@@ -291,9 +336,10 @@ function ClientHeader({ title, profile, userEmail, notifCount, cartCount, search
 
   return (
     <header className="h-16 flex items-center gap-4 px-5 border-b bg-card shrink-0">
-      <h1 className="text-lg font-bold shrink-0 w-40 truncate">{title}</h1>
+      <h1 className="text-lg font-bold shrink-0 truncate md:w-40">{title}</h1>
 
-      <div className="flex-1 max-w-sm relative">
+      {/* Search — desktop only */}
+      <div className="hidden md:flex flex-1 max-w-sm relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           value={search}
@@ -328,8 +374,8 @@ function ClientHeader({ title, profile, userEmail, notifCount, cartCount, search
           </button>
         )}
 
-        {/* User */}
-        <div className="flex items-center gap-2 pl-2 border-l ml-1">
+        {/* User — desktop only */}
+        <div className="hidden md:flex items-center gap-2 pl-2 border-l ml-1">
           <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0">
             {initials}
           </div>
