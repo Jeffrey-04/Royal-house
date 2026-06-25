@@ -17,6 +17,8 @@ import {
   STATUS_LABEL, STATUS_COLOR, statusProgress, formatFCFA, cartItemTotal,
   ROYAL_HOUSE_ID, type CartItem, type Extra, type OrderStatus,
 } from "@/lib/orders";
+import momoUrl from "@/assets/MOMOpng.png?url";
+import omUrl   from "@/assets/OM.png?url";
 
 // ——————————————————————————————————————————————
 // Config
@@ -496,9 +498,9 @@ async function reverseGeocode(lat: number, lng: number): Promise<string | null> 
 type PaymentMethod = "orange_money" | "mtn_money";
 type CartStep = "cart" | "payment" | "processing";
 
-const PAYMENT_METHODS: { id: PaymentMethod; label: string; color: string; bg: string; emoji: string }[] = [
-  { id: "orange_money", label: "Orange Money",    emoji: "🟠", color: "text-orange-600",  bg: "bg-orange-50 border-orange-200" },
-  { id: "mtn_money",   label: "MTN Mobile Money", emoji: "🟡", color: "text-yellow-600",  bg: "bg-yellow-50 border-yellow-200" },
+const PAYMENT_METHODS: { id: PaymentMethod; label: string; color: string; bg: string; logo: string }[] = [
+  { id: "orange_money", label: "Orange Money",    logo: omUrl,   color: "text-orange-600", bg: "bg-orange-50 border-orange-200" },
+  { id: "mtn_money",   label: "MTN Mobile Money", logo: momoUrl, color: "text-yellow-600", bg: "bg-yellow-50 border-yellow-200" },
 ];
 
 export function CartPanel({ cart, updateQty, removeFromCart, clearCart, userId, onSuccess }: {
@@ -691,7 +693,7 @@ export function CartPanel({ cart, updateQty, removeFromCart, clearCart, userId, 
               className={`w-full rounded-xl border p-3 flex items-center gap-3 transition-all text-left
                 ${paymentMethod === m.id ? `${m.bg} border-current ${m.color}` : "bg-background border-border hover:border-muted-foreground/40"}`}
             >
-              <span className="text-2xl">{m.emoji}</span>
+              <img src={m.logo} alt={m.label} className="h-8 w-8 object-contain shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className={`font-semibold text-sm ${paymentMethod === m.id ? m.color : ""}`}>{m.label}</p>
                 <p className="text-xs text-muted-foreground">Paiement mobile sécurisé</p>

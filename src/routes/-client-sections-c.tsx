@@ -15,6 +15,8 @@ import {
   ROYAL_HOUSE_ID, type CartItem, type OrderStatus,
 } from "@/lib/orders";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import momoUrl from "@/assets/MOMOpng.png?url";
+import omUrl   from "@/assets/OM.png?url";
 
 // ——————————————————————————————————————————————
 // Types
@@ -296,9 +298,9 @@ type PaymentRow = {
   payment_method: string | null; payment_status: string | null;
 };
 
-const METHOD_META: Record<string, { label: string; emoji: string; color: string }> = {
-  orange_money: { label: "Orange Money",    emoji: "🟠", color: "text-orange-600" },
-  mtn_money:   { label: "MTN Mobile Money", emoji: "🟡", color: "text-yellow-600" },
+const METHOD_META: Record<string, { label: string; logo: string; color: string }> = {
+  orange_money: { label: "Orange Money",    logo: omUrl,   color: "text-orange-600" },
+  mtn_money:   { label: "MTN Mobile Money", logo: momoUrl, color: "text-yellow-600" },
 };
 
 // ——————————————————————————————————————————————
@@ -390,9 +392,11 @@ export function SectionPaiements({ userId }: { userId: string }) {
           return (
             <div key={order.id} className="rounded-xl border bg-card px-4 py-3 space-y-2">
               <div className="flex items-start gap-3">
-                <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 text-lg
+                <div className={`h-10 w-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden
                   ${isReleased ? "bg-green-50" : "bg-amber-50"}`}>
-                  {method?.emoji ?? "💳"}
+                  {method
+                    ? <img src={method.logo} alt={method.label} className="h-8 w-8 object-contain" />
+                    : <CreditCard className="h-5 w-5 text-muted-foreground" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">
@@ -408,8 +412,9 @@ export function SectionPaiements({ userId }: { userId: string }) {
               </div>
               <div className="flex items-center justify-between pt-1 border-t">
                 {method && (
-                  <span className={`text-xs font-medium ${method.color}`}>
-                    {method.emoji} {method.label}
+                  <span className={`flex items-center gap-1.5 text-xs font-medium ${method.color}`}>
+                    <img src={method.logo} alt={method.label} className="h-4 w-4 object-contain" />
+                    {method.label}
                   </span>
                 )}
                 <span className={`inline-flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5
