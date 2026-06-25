@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   formatFCFA, STATUS_LABEL, STATUS_COLOR, type OrderStatus,
 } from "@/lib/orders";
+import { playNotificationSound } from "@/lib/sound";
+import { Input } from "@/components/ui/input";
 
 // Frais de livraison : montant fixe stocké sur chaque commande (delivery_fee)
 // Calculé à la commande selon la distance routière restaurant→client (Mapbox Directions)
@@ -436,7 +438,8 @@ function SectionLive({ userId }: { userId: string }) {
     refetchInterval: 3000,
   });
 
-  // Realtime orders
+  // Realtime orders — son quand une nouvelle commande devient disponible
+  const prevAvailableCount = useRef(0);
   useEffect(() => {
     const ch = supabase
       .channel(`courier-live-${userId}`)
@@ -447,6 +450,15 @@ function SectionLive({ userId }: { userId: string }) {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [userId, queryClient]);
+
+  // Son si nouvelles commandes disponibles
+  useEffect(() => {
+    if (available.length > prevAvailableCount.current) {
+      playNotificationSound();
+      toast.info(`${available.length} commande${available.length > 1 ? "s" : ""} disponible${available.length > 1 ? "s" : ""}`);
+    }
+    prevAvailableCount.current = available.length;
+  }, [available.length]);
 
   // GPS réel via watchPosition — active uniquement pendant une livraison en cours
   useEffect(() => {
@@ -523,10 +535,10 @@ function SectionLive({ userId }: { userId: string }) {
     const m: MapMarker[] = [];
     orders.forEach(o => {
       const isMine = o.courier_id === userId;
-      if (Number.isFinite(Number(o.pickup_lat)) && Number.isFinite(Number(o.pickup_lng)))
-        m.push({ id: `pickup-${o.id}`, lat: Number(o.pickup_lat), lng: Number(o.pickup_lng), kind: "restaurant", label: (o as any).restaurants?.name });
-      if (isMine && Number.isFinite(Number(o.dropoff_lat)) && Number.isFinite(Number(o.dropoff_lng)))
+      // Afficher le point de livraison (destination) pour toutes les commandes disponibles
+      if (Number.isFinite(Number(o.dropoff_lat)) && Number.isFinite(Number(o.dropoff_lng)))
         m.push({ id: `drop-${o.id}`, lat: Number(o.dropoff_lat), lng: Number(o.dropoff_lng), kind: "dropoff", label: o.dropoff_address });
+      // Position GPS du livreur uniquement pour ses propres courses
       if (isMine) {
         const loc = locById.get(o.id);
         if (loc) m.push({ id: `me-${o.id}`, lat: loc.lat, lng: loc.lng, kind: "courier", label: "Vous", pulse: true, vehicle });
@@ -551,6 +563,7 @@ function SectionLive({ userId }: { userId: string }) {
       .upsert({ order_id: orderId, courier_id: userId, lat: pickupLat, lng: pickupLng });
     queryClient.invalidateQueries({ queryKey: ["courier-live", userId] });
     setSelected(orderId);
+    playNotificationSound();
     toast.success("Course acceptée !");
   };
 
@@ -562,6 +575,7 @@ function SectionLive({ userId }: { userId: string }) {
       order_id: orderId, status: "delivering", created_by: userId, note: "En route vers le client",
     });
     queryClient.invalidateQueries({ queryKey: ["courier-live", userId] });
+    playNotificationSound();
     toast.success("Livraison démarrée !");
   };
 
@@ -576,6 +590,7 @@ function SectionLive({ userId }: { userId: string }) {
     queryClient.invalidateQueries({ queryKey: ["courier-delivered", userId] });
     setSelected(null);
     setRoute(null);
+    playNotificationSound();
     toast.success("Livraison terminée !");
   };
 
@@ -1009,8 +1024,6 @@ function SectionHistorique({ userId }: { userId: string }) {
 
 function SectionProfil({ user, onSignOut }: { user: { email?: string; id: string }; onSignOut: () => void }) {
   const queryClient = useQueryClient();
-  const name = user.email?.split("@")[0] ?? "Livreur";
-  const initials = name.slice(0, 2).toUpperCase();
 
   const { data: profile } = useQuery({
     queryKey: ["courier-profile", user.id],
@@ -1025,38 +1038,136 @@ function SectionProfil({ user, onSignOut }: { user: { email?: string; id: string
     },
   });
 
+  // Champs éditables
+  const [fullName, setFullName] = useState("");
+  const [phone,    setPhone]    = useState("");
+  const [editing,  setEditing]  = useState(false);
+  const [saving,   setSaving]   = useState(false);
+
+  // Synchronise les champs dès que le profil est chargé
+  useEffect(() => {
+    if (profile && !editing) {
+      setFullName(profile.full_name ?? "");
+      setPhone(profile.phone ?? "");
+    }
+  }, [profile, editing]);
+
+  const saveProfile = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ full_name: fullName.trim() || null, phone: phone.trim() || null })
+      .eq("id", user.id);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    queryClient.invalidateQueries({ queryKey: ["courier-profile", user.id] });
+    setEditing(false);
+    playNotificationSound();
+    toast.success("Profil mis à jour");
+  };
+
+  // Véhicule
   const [savingVehicle, setSavingVehicle] = useState(false);
+  const currentVehicle = (profile?.vehicle as VehicleType | undefined) ?? "moto";
 
   const setVehicle = async (v: VehicleType) => {
     setSavingVehicle(true);
     const { error } = await supabase.from("profiles").update({ vehicle: v }).eq("id", user.id);
-    if (error) toast.error(error.message);
-    else {
-      queryClient.invalidateQueries({ queryKey: ["courier-profile", user.id] });
-      toast.success("Moyen de transport mis à jour");
-    }
     setSavingVehicle(false);
+    if (error) { toast.error(error.message); return; }
+    queryClient.invalidateQueries({ queryKey: ["courier-profile", user.id] });
+    toast.success("Moyen de transport mis à jour");
   };
 
-  const currentVehicle = (profile?.vehicle as VehicleType | undefined) ?? 'moto';
-
   const VEHICLES: { id: VehicleType; emoji: string; label: string; sub: string }[] = [
-    { id: 'bike', emoji: '🚲', label: 'Vélo', sub: 'Itinéraire cyclable' },
-    { id: 'moto', emoji: '🛵', label: 'Moto', sub: 'Itinéraire routier' },
-    { id: 'car',  emoji: '🚗', label: 'Voiture', sub: 'Itinéraire routier' },
+    { id: "bike", emoji: "🚲", label: "Vélo",    sub: "Itinéraire cyclable" },
+    { id: "moto", emoji: "🛵", label: "Moto",    sub: "Itinéraire routier"  },
+    { id: "car",  emoji: "🚗", label: "Voiture", sub: "Itinéraire routier"  },
   ];
+
+  const displayName = profile?.full_name || user.email?.split("@")[0] || "Livreur";
+  const initials    = displayName.slice(0, 2).toUpperCase();
 
   return (
     <div className="max-w-xl mx-auto p-6 space-y-6">
+
+      {/* Avatar */}
       <div className="rounded-2xl border bg-card p-6 flex flex-col items-center text-center gap-3">
         <div className="h-20 w-20 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-2xl font-bold">
           {initials}
         </div>
         <div>
-          <p className="font-bold text-lg">{profile?.full_name || name}</p>
+          <p className="font-bold text-lg">{displayName}</p>
           <p className="text-sm text-muted-foreground">{user.email}</p>
           <Badge className="mt-2 bg-primary/10 text-primary border-0 text-xs font-medium">Livreur</Badge>
         </div>
+      </div>
+
+      {/* Informations personnelles éditables */}
+      <div className="rounded-2xl border bg-card p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm">Informations personnelles</h3>
+          {!editing && (
+            <button
+              onClick={() => setEditing(true)}
+              className="text-xs text-primary hover:underline"
+            >
+              Modifier
+            </button>
+          )}
+        </div>
+
+        {editing ? (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Nom complet</label>
+              <Input
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                placeholder="Jean Dupont"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Téléphone</label>
+              <Input
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+237 6XX XXX XXX"
+                type="tel"
+                className="h-9"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setEditing(false); setFullName(profile?.full_name ?? ""); setPhone(profile?.phone ?? ""); }}
+                disabled={saving}
+              >
+                Annuler
+              </Button>
+              <Button size="sm" onClick={saveProfile} disabled={saving}>
+                {saving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Enregistrement…</> : "Enregistrer"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm space-y-3">
+            <div className="flex justify-between items-center py-1 border-b">
+              <span className="text-muted-foreground">Nom</span>
+              <span className="font-medium">{profile?.full_name || <span className="text-muted-foreground italic">Non renseigné</span>}</span>
+            </div>
+            <div className="flex justify-between items-center py-1 border-b">
+              <span className="text-muted-foreground">Email</span>
+              <span className="font-medium">{user.email}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-muted-foreground">Téléphone</span>
+              <span className="font-medium">{profile?.phone || <span className="text-muted-foreground italic">Non renseigné</span>}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Moyen de déplacement */}
@@ -1073,9 +1184,8 @@ function SectionProfil({ user, onSignOut }: { user: { email?: string; id: string
               onClick={() => setVehicle(v.id)}
               className={`rounded-xl border p-3 flex flex-col items-center gap-1.5 transition-all
                 ${currentVehicle === v.id
-                  ? 'border-primary bg-primary/5 shadow-sm'
-                  : 'border-border bg-background hover:border-primary/40'
-                }`}
+                  ? "border-primary bg-primary/5 shadow-sm"
+                  : "border-border bg-background hover:border-primary/40"}`}
             >
               <span className="text-2xl">{v.emoji}</span>
               <span className="text-xs font-semibold">{v.label}</span>
@@ -1085,26 +1195,7 @@ function SectionProfil({ user, onSignOut }: { user: { email?: string; id: string
         </div>
       </div>
 
-      <div className="rounded-2xl border bg-card p-5 space-y-3">
-        <h3 className="font-semibold text-sm">Informations du compte</h3>
-        <div className="text-sm space-y-3">
-          <div className="flex justify-between items-center py-1 border-b">
-            <span className="text-muted-foreground">Email</span>
-            <span className="font-medium">{user.email}</span>
-          </div>
-          {profile?.phone && (
-            <div className="flex justify-between items-center py-1 border-b">
-              <span className="text-muted-foreground">Téléphone</span>
-              <span className="font-medium">{profile.phone}</span>
-            </div>
-          )}
-          <div className="flex justify-between items-center py-1">
-            <span className="text-muted-foreground">Rôle</span>
-            <span className="font-medium">Livreur</span>
-          </div>
-        </div>
-      </div>
-
+      {/* Déconnexion */}
       <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 flex items-center justify-between">
         <div>
           <p className="font-medium text-sm">Se déconnecter</p>
