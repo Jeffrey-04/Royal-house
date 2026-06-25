@@ -143,6 +143,7 @@ function ActiveOrderCard({ order, userId, onSuivi }: { order: OrderRow; userId: 
     if (error) { toast.error("Erreur lors de la confirmation."); return; }
     toast.success("Commande confirmée ! Paiement libéré. Bon appétit 🎉");
     queryClient.invalidateQueries({ queryKey: ["client-orders", userId] });
+    queryClient.invalidateQueries({ queryKey: ["client-active-orders", userId] });
   }
 
   return (
@@ -260,7 +261,8 @@ export function SectionSuivi({ userId }: { userId: string }) {
         .eq("client_id", userId)
         .not("status", "eq", "cancelled")
         // inclure "delivered" tant que le client n'a pas confirmé
-        .or("status.neq.delivered,payment_status.neq.released")
+        // NULL != 'released' vaut NULL en SQL, pas TRUE — on inclut aussi les payment_status IS NULL
+        .or("status.neq.delivered,payment_status.is.null,payment_status.neq.released")
         .order("created_at", { ascending: false });
       return (data ?? []) as OrderRow[];
     },
