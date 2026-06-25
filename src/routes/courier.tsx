@@ -438,6 +438,12 @@ function SectionLive({ userId }: { userId: string }) {
     refetchInterval: 3000,
   });
 
+  // Dérivés déclarés avant les useEffect qui les référencent (évite TDZ Rollup)
+  const myOrders   = orders.filter(o => o.courier_id === userId);
+  const available  = orders.filter(o => !o.courier_id);
+  const locById    = useMemo(() => new Map(myLocations.map(l => [l.order_id, l])), [myLocations]);
+  const selectedOrder = orders.find(o => o.id === selected);
+
   // Realtime orders — son quand une nouvelle commande devient disponible
   const prevAvailableCount = useRef(0);
   useEffect(() => {
@@ -493,11 +499,6 @@ function SectionLive({ userId }: { userId: string }) {
       }
     };
   }, [orders, userId]);
-
-  const myOrders = orders.filter(o => o.courier_id === userId);
-  const available = orders.filter(o => !o.courier_id);
-  const locById = useMemo(() => new Map(myLocations.map(l => [l.order_id, l])), [myLocations]);
-  const selectedOrder = orders.find(o => o.id === selected);
 
   // Calcul de l'itinéraire Mapbox dès qu'une course est sélectionnée (et m'appartient)
   useEffect(() => {
