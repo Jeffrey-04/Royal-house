@@ -17,7 +17,7 @@ import {
   STATUS_LABEL, STATUS_COLOR, statusProgress, formatFCFA, cartItemTotal,
   ROYAL_HOUSE_ID, type CartItem, type Extra, type OrderStatus,
 } from "@/lib/orders";
-import momoUrl from "@/assets/MOMOpng.png?url";
+import momoUrl from "@/assets/MOMO.png?url";
 import omUrl   from "@/assets/OM.png?url";
 
 // ——————————————————————————————————————————————

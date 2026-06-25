@@ -15,7 +15,7 @@ import {
   ROYAL_HOUSE_ID, type CartItem, type OrderStatus,
 } from "@/lib/orders";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
-import momoUrl from "@/assets/MOMOpng.png?url";
+import momoUrl from "@/assets/MOMO.png?url";
 import omUrl   from "@/assets/OM.png?url";
 
 // ——————————————————————————————————————————————
