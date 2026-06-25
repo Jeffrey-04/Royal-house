@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChefHat, Check, Clock, MapPin, Plus, Trash2, Pencil, X, LayoutDashboard, History, Utensils, ClipboardList, TrendingUp, Receipt, CheckCircle2 } from "lucide-react";
+import { ChefHat, Check, Clock, MapPin, Plus, Trash2, Pencil, X, LayoutDashboard, History, Utensils, ClipboardList, TrendingUp, Receipt, CheckCircle2, ImagePlus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/use-session";
 import { AppShell } from "@/components/AppShell";
@@ -499,7 +499,11 @@ function MenuManager() {
         )}
         {(items ?? []).map((item) => (
           <div key={item.id} className="flex items-center gap-3 rounded-xl border bg-background p-4">
-            <span className="text-2xl">{item.emoji ?? "🍽️"}</span>
+            {item.image_url ? (
+            <img src={item.image_url} alt={item.name} className="w-16 h-12 rounded-lg object-cover shrink-0" />
+          ) : (
+            <div className="w-16 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0 text-xl">🍽️</div>
+          )}
             <div className="flex-1 min-w-0">
               <div className="font-medium">{item.name}</div>
               {item.description && <div className="text-xs text-muted-foreground line-clamp-1">{item.description}</div>}
@@ -527,13 +531,43 @@ function MenuManager() {
   );
 }
 
+type MenuComponent = { name: string; price: number };
+
 function MenuItemForm({ initial, onClose, onSaved }: { initial: any | null; onClose: () => void; onSaved: () => void }) {
-  const [name, setName] = useState(initial?.name ?? "");
+  const [name, setName]             = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [price, setPrice] = useState(String(initial?.price ?? ""));
-  const [category, setCategory] = useState(initial?.category ?? "Plats signatures");
-  const [emoji, setEmoji] = useState(initial?.emoji ?? "🍽️");
+  const [price, setPrice]           = useState(String(initial?.price ?? ""));
+  const [category, setCategory]     = useState(initial?.category ?? "Plats signatures");
+  const [imageUrl, setImageUrl]     = useState<string>(initial?.image_url ?? "");
+  const [uploading, setUploading]   = useState(false);
+  const [components, setComponents] = useState<MenuComponent[]>(
+    Array.isArray(initial?.components) ? initial.components : []
+  );
   const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const ext  = file.name.split(".").pop() ?? "jpg";
+      const path = `${ROYAL_HOUSE_ID}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("menu-images").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from("menu-images").getPublicUrl(path);
+      setImageUrl(data.publicUrl);
+    } catch (err: any) {
+      toast.error("Upload échoué : " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const addComponent    = () => setComponents(p => [...p, { name: "", price: 0 }]);
+  const updateComponent = (i: number, field: keyof MenuComponent, val: string | number) =>
+    setComponents(p => p.map((c, idx) => idx === i ? { ...c, [field]: val } : c));
+  const removeComponent = (i: number) => setComponents(p => p.filter((_, idx) => idx !== i));
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -545,7 +579,9 @@ function MenuItemForm({ initial, onClose, onSaved }: { initial: any | null; onCl
         description: description || null,
         price: Number(price) || 0,
         category: category || null,
-        emoji: emoji || null,
+        image_url: imageUrl || null,
+        emoji: null,
+        components: components.filter(c => c.name.trim()),
       };
       const { error } = initial
         ? await (supabase as any).from("menu_items").update(payload).eq("id", initial.id)
@@ -561,28 +597,70 @@ function MenuItemForm({ initial, onClose, onSaved }: { initial: any | null; onCl
   };
 
   return (
-    <form onSubmit={save} className="rounded-xl border bg-card p-5 space-y-3">
+    <form onSubmit={save} className="rounded-xl border bg-card p-5 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">{initial ? "Modifier le plat" : "Nouveau plat"}</h3>
         <Button type="button" variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
       </div>
-      <div className="grid grid-cols-[80px_1fr] gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Emoji</Label>
-          <Input value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={4} className="text-center text-xl" />
+
+      {/* Image upload */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">Photo du plat</Label>
+        <div
+          onClick={() => fileRef.current?.click()}
+          className="relative cursor-pointer rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/30 hover:bg-muted/50 transition-colors overflow-hidden"
+          style={{ height: 160 }}
+        >
+          {imageUrl ? (
+            <>
+              <img src={imageUrl} alt="Aperçu" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                <span className="text-white text-sm font-medium">Changer la photo</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
+              {uploading ? <Loader2 className="h-8 w-8 animate-spin" /> : <ImagePlus className="h-8 w-8" />}
+              <span className="text-sm">{uploading ? "Upload en cours…" : "Cliquer pour ajouter une photo"}</span>
+              <span className="text-xs">JPG, PNG, WebP · max 5 Mo</span>
+            </div>
+          )}
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Nom</Label>
-          <Input required value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={handleImageUpload}
+          disabled={uploading}
+        />
+        {imageUrl && (
+          <button
+            type="button"
+            onClick={() => setImageUrl("")}
+            className="text-xs text-destructive hover:underline"
+          >
+            Supprimer la photo
+          </button>
+        )}
       </div>
+
+      {/* Nom */}
+      <div className="space-y-1">
+        <Label className="text-xs">Nom du plat *</Label>
+        <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Ndolé Royal" />
+      </div>
+
+      {/* Description */}
       <div className="space-y-1">
         <Label className="text-xs">Description</Label>
-        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Ingrédients, accompagnements…" />
       </div>
+
+      {/* Prix + Catégorie */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Prix (FCFA)</Label>
+          <Label className="text-xs">Prix (FCFA) *</Label>
           <Input type="number" step="100" min="0" required value={price} onChange={(e) => setPrice(e.target.value)} />
         </div>
         <div className="space-y-1">
@@ -590,9 +668,57 @@ function MenuItemForm({ initial, onClose, onSaved }: { initial: any | null; onCl
           <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Plats signatures, Boissons…" />
         </div>
       </div>
+
+      {/* Composants / Suppléments */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">Suppléments disponibles</Label>
+          <button
+            type="button"
+            onClick={addComponent}
+            className="text-xs text-primary flex items-center gap-1 hover:underline"
+          >
+            <Plus className="h-3 w-3" />Ajouter
+          </button>
+        </div>
+        {components.length === 0 && (
+          <p className="text-xs text-muted-foreground italic">
+            Aucun supplément. Ex : Plantain extra, Miondo, Poisson supplémentaire…
+          </p>
+        )}
+        {components.map((comp, i) => (
+          <div key={i} className="flex gap-2 items-center">
+            <Input
+              value={comp.name}
+              onChange={(e) => updateComponent(i, "name", e.target.value)}
+              placeholder="Nom du supplément"
+              className="flex-1 h-8 text-sm"
+            />
+            <Input
+              type="number"
+              min="0"
+              step="100"
+              value={comp.price}
+              onChange={(e) => updateComponent(i, "price", Number(e.target.value))}
+              placeholder="Prix FCFA"
+              className="w-28 h-8 text-sm"
+            />
+            <button type="button" onClick={() => removeComponent(i)} className="text-destructive hover:opacity-70">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+        {components.length > 0 && (
+          <p className="text-xs text-muted-foreground">Prix = 0 FCFA → supplément gratuit</p>
+        )}
+      </div>
+
       <div className="flex gap-2 justify-end pt-2">
         <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
-        <Button type="submit" disabled={busy}>{busy ? "…" : "Enregistrer"}</Button>
+        <Button type="submit" disabled={busy || uploading}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+          {busy ? "Enregistrement…" : "Enregistrer"}
+        </Button>
       </div>
     </form>
   );

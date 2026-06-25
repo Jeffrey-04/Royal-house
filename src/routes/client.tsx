@@ -10,7 +10,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/use-session";
 import { Input } from "@/components/ui/input";
-import type { CartItem } from "@/lib/orders";
+import type { CartItem, Extra } from "@/lib/orders";
 import { SectionAccueil, SectionCommander } from "./-client-sections-a";
 import { SectionCommandes, SectionSuivi } from "./-client-sections-b";
 import { SectionNotifications, SectionRecompenses, SectionProfil, SectionPaiements } from "./-client-sections-c";
@@ -101,11 +101,17 @@ function ClientPage() {
 
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
-  function addToCart(item: { id: string; name: string; price: number }) {
+  function addToCart(item: { id: string; name: string; price: number }, extras?: Extra[]) {
     setCart(prev => {
-      const ex = prev.find(c => c.id === item.id);
-      if (ex) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c);
-      return [...prev, { ...item, qty: 1 }];
+      const hasExtras = extras && extras.length > 0;
+      if (!hasExtras) {
+        // Pas de suppléments : incrémenter la quantité si déjà présent
+        const ex = prev.find(c => c.id === item.id && !c.extras?.length);
+        if (ex) return prev.map(c => c === ex ? { ...c, qty: c.qty + 1 } : c);
+        return [...prev, { ...item, qty: 1 }];
+      }
+      // Avec suppléments : toujours ajouter une nouvelle ligne
+      return [...prev, { ...item, qty: 1, extras }];
     });
   }
 

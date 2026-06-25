@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input";
 import { MapView } from "@/components/MapView";
 import type { MapMarker } from "@/components/MapView";
 import {
-  STATUS_LABEL, STATUS_COLOR, statusProgress, formatFCFA,
-  ROYAL_HOUSE_ID, type CartItem, type OrderStatus,
+  STATUS_LABEL, STATUS_COLOR, statusProgress, formatFCFA, cartItemTotal,
+  ROYAL_HOUSE_ID, type CartItem, type Extra, type OrderStatus,
 } from "@/lib/orders";
 
 // ——————————————————————————————————————————————
@@ -28,7 +28,9 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN as string;
 // ——————————————————————————————————————————————
 type MenuItem = {
   id: string; name: string; price: number;
-  description: string | null; category: string; emoji: string;
+  description: string | null; category: string;
+  image_url: string | null;
+  components: Array<{ name: string; price: number }> | null;
 };
 type OrderRow = {
   id: string; status: OrderStatus; total: string | number | null;
@@ -93,12 +95,12 @@ function useMenuItems() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("menu_items")
-        .select("id, name, price, description, category, emoji")
+        .select("id, name, price, description, category, image_url, components")
         .eq("restaurant_id", ROYAL_HOUSE_ID)
         .eq("available", true)
         .order("sort_order");
       if (error) throw error;
-      return (data ?? []) as MenuItem[];
+      return (data ?? []) as unknown as MenuItem[];
     },
   });
 }
@@ -110,7 +112,7 @@ export function SectionAccueil({ userId, profile, cart, addToCart, updateQty, re
   userId: string;
   profile: { full_name: string | null } | null | undefined;
   cart: CartItem[];
-  addToCart: (item: { id: string; name: string; price: number }) => void;
+  addToCart: (item: { id: string; name: string; price: number }, extras?: Extra[]) => void;
   updateQty: (id: string, delta: number) => void;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
@@ -241,21 +243,29 @@ export function SectionAccueil({ userId, profile, cart, addToCart, updateQty, re
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {items.slice(0, 6).map(item => {
                 const inCart = cart.find(c => c.id === item.id);
+                const hasComponents = (item.components?.length ?? 0) > 0;
                 return (
                   <div key={item.id} className="rounded-xl border bg-card p-3 flex flex-col gap-2 hover:shadow-sm transition-shadow">
-                    <div className="text-3xl text-center select-none">{item.emoji}</div>
+                    <MenuItemImage imageUrl={item.image_url} name={item.name} className="h-20 rounded-lg" />
                     <p className="font-medium text-sm leading-tight text-center">{item.name}</p>
                     <div className="flex items-center justify-between mt-auto">
                       <span className="text-primary font-bold text-sm">{formatFCFA(item.price)}</span>
-                      <button
-                        onClick={() => addToCart(item)}
-                        className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
-                          ${inCart
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
+                      {hasComponents ? (
+                        <CustomizeDialog item={item} onAdd={addToCart}>
+                          <button className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
+                            ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}>
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </CustomizeDialog>
+                      ) : (
+                        <button
+                          onClick={() => addToCart(item)}
+                          className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
+                            ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                     {inCart && <p className="text-xs text-primary text-center font-medium">× {inCart.qty}</p>}
                   </div>
@@ -337,7 +347,7 @@ export function SectionCommander({ userId, search, setSearch, cart, addToCart, u
   search: string;
   setSearch: (v: string) => void;
   cart: CartItem[];
-  addToCart: (item: { id: string; name: string; price: number }) => void;
+  addToCart: (item: { id: string; name: string; price: number }, extras?: Extra[]) => void;
   updateQty: (id: string, delta: number) => void;
   removeFromCart: (id: string) => void;
   clearCart: () => void;
@@ -397,29 +407,40 @@ export function SectionCommander({ userId, search, setSearch, cart, addToCart, u
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pb-6">
               {filtered.map(item => {
                 const inCart = cart.find(c => c.id === item.id);
+                const hasComponents = (item.components?.length ?? 0) > 0;
                 return (
                   <div
                     key={item.id}
                     className="rounded-2xl border bg-card p-4 flex flex-col gap-2 hover:shadow-md transition-shadow"
                   >
-                    <div className="text-4xl text-center select-none">{item.emoji}</div>
+                    <MenuItemImage imageUrl={item.image_url} name={item.name} className="h-28 rounded-xl" />
                     <div className="flex-1">
                       <p className="font-semibold text-sm leading-tight">{item.name}</p>
                       {item.description && (
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
                       )}
+                      {hasComponents && (
+                        <p className="text-[10px] text-primary/70 mt-1">+ suppléments disponibles</p>
+                      )}
                     </div>
                     <div className="flex items-center justify-between mt-auto pt-1">
                       <span className="text-primary font-bold text-sm">{formatFCFA(item.price)}</span>
-                      <button
-                        onClick={() => addToCart(item)}
-                        className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
-                          ${inCart
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
+                      {hasComponents ? (
+                        <CustomizeDialog item={item} onAdd={addToCart}>
+                          <button className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
+                            ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}>
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </CustomizeDialog>
+                      ) : (
+                        <button
+                          onClick={() => addToCart(item)}
+                          className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
+                            ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                     {inCart && <p className="text-xs text-primary font-medium">× {inCart.qty} dans le panier</p>}
                   </div>
@@ -512,7 +533,7 @@ export function CartPanel({ cart, updateQty, removeFromCart, clearCart, userId, 
     });
   }, [coords]);
 
-  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const subtotal = cart.reduce((s, i) => s + cartItemTotal(i), 0);
   const total = subtotal + deliveryFee;
 
   // Auto-geocode when user stops typing
@@ -730,13 +751,22 @@ export function CartPanel({ cart, updateQty, removeFromCart, clearCart, userId, 
       </div>
 
       <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-        {cart.map(item => (
-          <div key={item.id} className="flex items-center gap-2">
+        {cart.map((item, idx) => (
+          <div key={`${item.id}-${idx}`} className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium truncate">{item.name}</p>
               <p className="text-xs text-muted-foreground">{formatFCFA(item.price)}</p>
+              {item.extras && item.extras.length > 0 && (
+                <div className="mt-0.5 space-y-0.5">
+                  {item.extras.map((e, i) => (
+                    <p key={i} className="text-[10px] text-primary/70">
+                      + {e.name} ×{e.qty} ({formatFCFA(e.price * e.qty)})
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1 shrink-0 mt-0.5">
               <button
                 onClick={() => updateQty(item.id, -1)}
                 className="h-6 w-6 rounded-full border flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
@@ -757,8 +787,8 @@ export function CartPanel({ cart, updateQty, removeFromCart, clearCart, userId, 
                 <Trash2 className="h-3 w-3" />
               </button>
             </div>
-            <span className="text-xs font-semibold w-16 text-right shrink-0">
-              {formatFCFA(item.price * item.qty)}
+            <span className="text-xs font-semibold w-16 text-right shrink-0 mt-0.5">
+              {formatFCFA(cartItemTotal(item))}
             </span>
           </div>
         ))}
@@ -835,6 +865,104 @@ export function CartPanel({ cart, updateQty, removeFromCart, clearCart, userId, 
           : <><CreditCard className="h-3.5 w-3.5 mr-1.5" />Passer au paiement — {formatFCFA(total)}</>}
       </Button>
     </div>
+  );
+}
+
+// ——————————————————————————————————————————————
+// MenuItemImage
+// ——————————————————————————————————————————————
+function MenuItemImage({ imageUrl, name, className }: { imageUrl: string | null; name: string; className?: string }) {
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt={name}
+        className={`w-full object-cover bg-muted ${className ?? ""}`}
+      />
+    );
+  }
+  return (
+    <div className={`w-full bg-muted flex items-center justify-center text-4xl select-none ${className ?? ""}`}>
+      🍽️
+    </div>
+  );
+}
+
+// ——————————————————————————————————————————————
+// CustomizeDialog — suppléments
+// ——————————————————————————————————————————————
+function CustomizeDialog({ item, onAdd, children }: {
+  item: MenuItem;
+  onAdd: (item: { id: string; name: string; price: number }, extras?: Extra[]) => void;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const components = item.components ?? [];
+  const [qtys, setQtys] = useState<number[]>(() => components.map(() => 0));
+
+  function handleAdd() {
+    const extras: Extra[] = components
+      .map((c, i) => ({ name: c.name, price: c.price, qty: qtys[i] }))
+      .filter(e => e.qty > 0);
+    onAdd(item, extras.length > 0 ? extras : undefined);
+    setQtys(components.map(() => 0));
+    setOpen(false);
+  }
+
+  const extrasTotal = components.reduce((s, c, i) => s + c.price * qtys[i], 0);
+
+  return (
+    <>
+      <span onClick={() => setOpen(true)}>{children}</span>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setOpen(false)}>
+          <div
+            className="bg-card rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="font-bold text-base">{item.name}</h3>
+              <p className="text-sm text-muted-foreground">{formatFCFA(item.price)} — choisissez vos suppléments</p>
+            </div>
+            <div className="space-y-3">
+              {components.map((c, i) => (
+                <div key={c.name} className="flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{c.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatFCFA(c.price)}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => setQtys(prev => prev.map((q, j) => j === i ? Math.max(0, q - 1) : q))}
+                      className="h-7 w-7 rounded-full border flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <span className="w-5 text-center text-sm font-bold">{qtys[i]}</span>
+                    <button
+                      onClick={() => setQtys(prev => prev.map((q, j) => j === i ? q + 1 : q))}
+                      className="h-7 w-7 rounded-full border flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t pt-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="font-bold text-primary">{formatFCFA(item.price + extrasTotal)}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Annuler</Button>
+                <Button size="sm" onClick={handleAdd}>Ajouter au panier</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

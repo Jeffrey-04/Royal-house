@@ -44,7 +44,23 @@ export function statusProgress(s: OrderStatus): number {
   return Math.round(((STATUS_ORDER.indexOf(s) + 1) / STATUS_ORDER.length) * 100);
 }
 
-export type CartItem = { id: string; name: string; price: number; qty: number };
+/** Un supplément sélectionné par le client (ex: plantain extra) */
+export type Extra = { name: string; price: number; qty: number };
+
+/** Un élément du panier avec ses suppléments optionnels */
+export type CartItem = {
+  id: string;
+  name: string;
+  price: number;
+  qty: number;
+  extras?: Extra[];
+};
+
+/** Prix total d'une ligne du panier (plat + suppléments) */
+export function cartItemTotal(item: CartItem): number {
+  const extrasPerPortion = (item.extras ?? []).reduce((s, e) => s + e.price * e.qty, 0);
+  return (item.price + extrasPerPortion) * item.qty;
+}
 
 export function interpolate(
   from: [number, number],
