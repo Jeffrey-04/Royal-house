@@ -120,7 +120,7 @@ function CourierPage() {
 // ============ BOTTOM NAVBAR (mobile) ============
 
 const BOTTOM_NAV_COURIER: { id: CourierSection; icon: typeof Bike; label: string }[] = [
-  { id: "dashboard",   icon: LayoutDashboard, label: "Dashboard" },
+  { id: "dashboard",   icon: LayoutDashboard, label: "Tableau" },
   { id: "live",        icon: ClipboardList,   label: "Courses" },
   { id: "wallet",      icon: Wallet,          label: "Wallet" },
   { id: "historique",  icon: History,         label: "Historique" },
@@ -146,9 +146,9 @@ function CourierBottomNav({ section, setSection }: {
           <button
             key={item.id}
             onClick={() => setSection(item.id)}
-            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-3xl transition-all duration-200
+            className={`flex flex-col items-center gap-0.5 px-4 py-3 rounded-3xl transition-all duration-200
               ${active
-                ? "bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
+                ? "bg-white/25 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
                 : "text-white/50 hover:text-white/75"}`}
           >
             <item.icon className="h-5 w-5" />
@@ -656,7 +656,7 @@ function SectionLive({ userId }: { userId: string }) {
 
   return (
     <div className="flex-1 h-full grid lg:grid-cols-[1fr_420px]">
-      <div className="relative min-h-[320px] lg:min-h-0 p-4">
+      <div className="relative min-h-[320px] lg:min-h-0 p-4 pb-28 md:pb-4">
         <MapView
           markers={markers}
           fitToMarkers={!route && markers.length > 0}

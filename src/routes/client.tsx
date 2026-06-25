@@ -221,9 +221,9 @@ function ClientBottomNav({ section, setSection }: {
           <button
             key={item.id}
             onClick={() => setSection(item.id)}
-            className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-3xl transition-all duration-200
+            className={`flex flex-col items-center gap-0.5 px-4 py-3 rounded-3xl transition-all duration-200
               ${active
-                ? "bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
+                ? "bg-white/25 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)]"
                 : "text-white/50 hover:text-white/75"}`}
           >
             <item.icon className="h-5 w-5" />
