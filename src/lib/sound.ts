@@ -1,20 +1,29 @@
 /**
- * Notification sonore.
- * Utilise le fichier WAV bundlé par Vite,
- * sinon génère un bip court via Web Audio API.
+ * Notification sonore — initialisation paresseuse (évite TDZ/SSR Rollup).
+ * Utilise le fichier WAV bundlé si disponible, sinon bip Web Audio API.
  */
 
 import notificationUrl from "../assets/sounds/notification.wav?url";
 
-let audio: HTMLAudioElement | null = null;
+let audio: HTMLAudioElement | null | undefined = undefined; // undefined = non initialisé
 
-if (typeof window !== "undefined") {
+function getAudio(): HTMLAudioElement | null {
+  if (typeof window === "undefined") return null;
+  if (audio !== undefined) return audio;
+
   const a = new Audio(notificationUrl);
   a.preload = "auto";
   a.volume = 0.6;
-  a.addEventListener("canplaythrough", () => { audio = a; }, { once: true });
-  a.addEventListener("error", () => { audio = null; });
-  a.load();
+  // Marque comme prêt ou indisponible de façon synchrone
+  if (a.readyState >= 3) {
+    audio = a;
+  } else {
+    audio = null; // utilisera beep en attendant
+    a.addEventListener("canplaythrough", () => { audio = a; }, { once: true });
+    a.addEventListener("error", () => { audio = null; }, { once: true });
+    a.load();
+  }
+  return audio;
 }
 
 function beep() {
@@ -39,9 +48,10 @@ function beep() {
 
 export function playNotificationSound() {
   if (typeof window === "undefined") return;
-  if (audio) {
-    audio.currentTime = 0;
-    audio.play().catch(() => beep());
+  const a = getAudio();
+  if (a) {
+    a.currentTime = 0;
+    a.play().catch(() => beep());
   } else {
     beep();
   }
