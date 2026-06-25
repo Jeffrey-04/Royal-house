@@ -451,8 +451,9 @@ type MenuItem = {
 
 function MenuManager() {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState<MenuItem | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing]       = useState<MenuItem | null>(null);
+  const [showForm, setShowForm]     = useState(false);
+  const [activeCategory, setActiveCategory] = useState("Tous");
 
   const { data: items = [] } = useQuery<MenuItem[]>({
     queryKey: ["menu-admin", ROYAL_HOUSE_ID],
@@ -467,7 +468,10 @@ function MenuManager() {
     },
   });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["menu-admin", ROYAL_HOUSE_ID] });
+  const refresh   = () => queryClient.invalidateQueries({ queryKey: ["menu-admin", ROYAL_HOUSE_ID] });
+  const openNew   = () => { setEditing(null); setShowForm(true); };
+  const openEdit  = (item: MenuItem) => { setEditing(item); setShowForm(true); };
+  const closeForm = () => { setShowForm(false); setEditing(null); };
 
   const toggleAvail = async (item: MenuItem) => {
     const { error } = await supabase
@@ -486,100 +490,181 @@ function MenuManager() {
     refresh();
   };
 
-  const openNew  = () => { setEditing(null);  setShowForm(true); };
-  const openEdit = (item: MenuItem) => { setEditing(item); setShowForm(true); };
-  const closeForm = () => { setShowForm(false); setEditing(null); };
+  // Catégories uniques + "Tous"
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(items.map(i => i.category ?? "Autres")));
+    return ["Tous", ...cats];
+  }, [items]);
+
+  const filtered = useMemo(() =>
+    activeCategory === "Tous"
+      ? items
+      : items.filter(i => (i.category ?? "Autres") === activeCategory),
+    [items, activeCategory]
+  );
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-5">
+    <div className="flex flex-col h-full">
 
-      {/* En-tête */}
-      <div className="flex items-center justify-between">
+      {/* ── Barre supérieure ── */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-4">
         <div>
-          <h2 className="text-2xl font-bold">Menu du restaurant</h2>
-          <p className="text-sm text-muted-foreground">Gérez les plats proposés à vos clients.</p>
+          <h2 className="text-2xl font-bold">Menu</h2>
+          <p className="text-sm text-muted-foreground">{items.length} plat{items.length !== 1 ? "s" : ""} au total</p>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4 mr-2" />Nouveau plat
+        <Button onClick={openNew} className="gap-2">
+          <Plus className="h-4 w-4" />Ajouter un plat
         </Button>
       </div>
 
-      {/* Formulaire de création / édition */}
+      {/* ── Formulaire (glissant en haut) ── */}
       {showForm && (
-        <MenuItemForm
-          key={editing?.id ?? "new"}
-          initial={editing}
-          onClose={closeForm}
-          onSaved={() => { closeForm(); refresh(); }}
-        />
+        <div className="px-6 pb-4">
+          <MenuItemForm
+            key={editing?.id ?? "new"}
+            initial={editing}
+            onClose={closeForm}
+            onSaved={() => { closeForm(); refresh(); }}
+          />
+        </div>
       )}
 
-      {/* Liste des plats */}
-      {items.length === 0 && !showForm ? (
-        <div className="text-center text-sm text-muted-foreground border border-dashed rounded-xl p-10">
-          Aucun plat pour l'instant. Cliquez sur « Nouveau plat » pour commencer.
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 rounded-xl border bg-background p-3"
-            >
-              {/* Miniature */}
-              {item.image_url ? (
-                <img
-                  src={item.image_url}
-                  alt={item.name}
-                  className="w-16 h-12 rounded-lg object-cover shrink-0"
-                />
-              ) : (
-                <div className="w-16 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0 text-2xl">
-                  🍽️
-                </div>
-              )}
-
-              {/* Infos */}
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">{item.name}</p>
-                {item.description && (
-                  <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
-                )}
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs font-bold text-primary">{formatFCFA(Number(item.price))}</span>
-                  {item.category && (
-                    <Badge variant="secondary" className="text-xs py-0">{item.category}</Badge>
-                  )}
-                  {Array.isArray(item.components) && item.components.length > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      · {item.components.length} supplément{item.components.length > 1 ? "s" : ""}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="flex items-center gap-1.5">
-                  <Switch
-                    checked={item.available}
-                    onCheckedChange={() => toggleAvail(item)}
+      {/* ── Onglets catégories ── */}
+      <div className="px-6 pb-3 overflow-x-auto">
+        <div className="flex gap-2 min-w-max">
+          {categories.map(cat => {
+            const count = cat === "Tous"
+              ? items.length
+              : items.filter(i => (i.category ?? "Autres") === cat).length;
+            // miniature : 1ère image de la catégorie
+            const thumb = cat !== "Tous"
+              ? items.find(i => (i.category ?? "Autres") === cat && i.image_url)?.image_url
+              : null;
+            const active = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all whitespace-nowrap
+                  ${active
+                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                    : "bg-card text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"
+                  }`}
+              >
+                {thumb && (
+                  <img
+                    src={thumb}
+                    alt={cat}
+                    className="w-7 h-7 rounded-lg object-cover shrink-0"
                   />
-                  <span className="text-xs text-muted-foreground w-12">
-                    {item.available ? "Dispo" : "Indispo"}
-                  </span>
-                </div>
-                <Button size="icon" variant="ghost" onClick={() => openEdit(item)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => remove(item.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          ))}
+                )}
+                <span>{cat}</span>
+                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-md
+                  ${active ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
-      )}
+      </div>
+
+      {/* ── Grille de plats ── */}
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
+        {items.length === 0 && !showForm ? (
+          <div className="flex flex-col items-center justify-center h-48 border border-dashed rounded-2xl gap-3 text-muted-foreground">
+            <Utensils className="h-8 w-8 opacity-40" />
+            <p className="text-sm">Aucun plat. Cliquez sur « Ajouter un plat » pour commencer.</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 border border-dashed rounded-2xl gap-2 text-muted-foreground">
+            <p className="text-sm">Aucun plat dans cette catégorie.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filtered.map(item => (
+              <div
+                key={item.id}
+                className="group rounded-2xl border bg-card overflow-hidden hover:shadow-md transition-shadow"
+              >
+                {/* Photo */}
+                <div className="relative w-full bg-muted" style={{ paddingBottom: "65%" }}>
+                  {item.image_url ? (
+                    <img
+                      src={item.image_url}
+                      alt={item.name}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-4xl">
+                      🍽️
+                    </div>
+                  )}
+                  {/* Badge disponibilité */}
+                  <div className="absolute top-2 left-2">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full
+                      ${item.available
+                        ? "bg-green-500/90 text-white"
+                        : "bg-black/50 text-white"
+                      }`}>
+                      {item.available ? "Disponible" : "Indisponible"}
+                    </span>
+                  </div>
+                  {/* Boutons actions (visibles au hover) */}
+                  <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => openEdit(item)}
+                      className="h-7 w-7 rounded-lg bg-white/90 backdrop-blur-sm flex items-center justify-center shadow hover:bg-white transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5 text-foreground" />
+                    </button>
+                    <button
+                      onClick={() => remove(item.id)}
+                      className="h-7 w-7 rounded-lg bg-white/90 backdrop-blur-sm flex items-center justify-center shadow hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Infos */}
+                <div className="p-3 space-y-1.5">
+                  <p className="font-semibold text-sm leading-tight line-clamp-2">{item.name}</p>
+                  {item.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                      {item.description}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-sm font-bold text-primary">
+                      {formatFCFA(Number(item.price))}
+                    </span>
+                    {Array.isArray(item.components) && item.components.length > 0 && (
+                      <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">
+                        +{item.components.length} suppl.
+                      </span>
+                    )}
+                  </div>
+                  {/* Toggle dispo */}
+                  <div
+                    className="flex items-center justify-between pt-1 border-t mt-1 cursor-pointer"
+                    onClick={() => toggleAvail(item)}
+                  >
+                    <span className="text-xs text-muted-foreground">
+                      {item.available ? "Masquer du menu" : "Remettre en ligne"}
+                    </span>
+                    <Switch
+                      checked={item.available}
+                      onCheckedChange={() => toggleAvail(item)}
+                      onClick={e => e.stopPropagation()}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
