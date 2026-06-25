@@ -9,18 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as RestaurantRouteImport } from './routes/restaurant'
 import { Route as CourierRouteImport } from './routes/courier'
 import { Route as ClientRouteImport } from './routes/client'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
-const RestaurantRoute = RestaurantRouteImport.update({
-  id: '/restaurant',
-  path: '/restaurant',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const CourierRoute = CourierRouteImport.update({
   id: '/courier',
   path: '/courier',
@@ -53,7 +47,6 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/client': typeof ClientRoute
   '/courier': typeof CourierRoute
-  '/restaurant': typeof RestaurantRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -61,7 +54,6 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/client': typeof ClientRoute
   '/courier': typeof CourierRoute
-  '/restaurant': typeof RestaurantRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -70,21 +62,13 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/client': typeof ClientRoute
   '/courier': typeof CourierRoute
-  '/restaurant': typeof RestaurantRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/auth' | '/client' | '/courier' | '/restaurant'
+  fullPaths: '/' | '/admin' | '/auth' | '/client' | '/courier'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/auth' | '/client' | '/courier' | '/restaurant'
-  id:
-    | '__root__'
-    | '/'
-    | '/admin'
-    | '/auth'
-    | '/client'
-    | '/courier'
-    | '/restaurant'
+  to: '/' | '/admin' | '/auth' | '/client' | '/courier'
+  id: '__root__' | '/' | '/admin' | '/auth' | '/client' | '/courier'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -93,18 +77,10 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ClientRoute: typeof ClientRoute
   CourierRoute: typeof CourierRoute
-  RestaurantRoute: typeof RestaurantRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/restaurant': {
-      id: '/restaurant'
-      path: '/restaurant'
-      fullPath: '/restaurant'
-      preLoaderRoute: typeof RestaurantRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/courier': {
       id: '/courier'
       path: '/courier'
@@ -149,7 +125,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ClientRoute: ClientRoute,
   CourierRoute: CourierRoute,
-  RestaurantRoute: RestaurantRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
