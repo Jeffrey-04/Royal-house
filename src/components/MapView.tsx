@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import locationPinUrl from "@/assets/location-pin.svg?url";
+import bicycleUrl   from "@/assets/bicycle.svg?url";
+import bikeUrl      from "@/assets/bike.svg?url";
+import carUrl       from "@/assets/car.svg?url";
+import crownUrl     from "@/assets/crown.svg?url";
 
 export type VehicleType = 'bike' | 'moto' | 'car';
 
@@ -29,10 +33,10 @@ interface MapViewProps {
 const BRAND = "oklch(0.65 0.21 25)";
 const BRAND_HEX = "#d97706"; // approximation hex pour les triangles CSS
 
-function vehicleEmoji(v?: VehicleType): string {
-  if (v === 'bike') return '🚲';
-  if (v === 'car')  return '🚗';
-  return '🛵'; // moto par défaut
+function vehicleIconUrl(v?: VehicleType): string {
+  if (v === 'bike') return bicycleUrl;
+  if (v === 'car')  return carUrl;
+  return bikeUrl; // moto par défaut
 }
 
 function buildMarkerElement(m: MapMarker): HTMLElement {
@@ -61,32 +65,25 @@ function buildMarkerElement(m: MapMarker): HTMLElement {
     wrap.appendChild(pinWrap);
 
   } else if (m.kind === 'restaurant' || m.kind === 'pickup') {
-    // ── Chip blanc + triangle pointer (Crown)
+    // ── Chip blanc + triangle pointer (couronne SVG, sans label)
     const chip = document.createElement('div');
     chip.style.cssText = `
       background:white;border-radius:10px;
-      padding:6px 10px;
+      padding:7px 9px;
       box-shadow:0 4px 14px rgba(0,0,0,.18);
-      display:flex;align-items:center;gap:5px;
-      white-space:nowrap;
+      display:flex;align-items:center;justify-content:center;
       transition:transform .15s ease;
       border:1.5px solid rgba(0,0,0,.06);
     `;
-    const icon = document.createElement('span');
-    icon.textContent = '👑';
-    icon.style.cssText = 'font-size:16px;line-height:1;';
+    const icon = document.createElement('img');
+    icon.src = crownUrl;
+    icon.alt = 'Restaurant';
+    icon.style.cssText = 'width:22px;height:22px;display:block;';
     chip.appendChild(icon);
-    if (m.label) {
-      const lbl = document.createElement('span');
-      lbl.textContent = m.label.length > 14 ? m.label.slice(0,13)+'…' : m.label;
-      lbl.style.cssText = 'font-size:11px;font-weight:600;color:#374151;';
-      chip.appendChild(lbl);
-    }
     const tri = document.createElement('div');
     tri.style.cssText = 'width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid white;margin-top:-1px;filter:drop-shadow(0 2px 2px rgba(0,0,0,.1));';
     wrap.appendChild(chip);
     wrap.appendChild(tri);
-    // hover sur chip
     wrap.onmouseenter = () => (chip.style.transform = 'scale(1.06)');
     wrap.onmouseleave = () => (chip.style.transform = 'scale(1)');
 
@@ -102,9 +99,10 @@ function buildMarkerElement(m: MapMarker): HTMLElement {
       transition:transform .15s ease;
       position:relative;
     `;
-    const icon = document.createElement('span');
-    icon.textContent = vehicleEmoji(m.vehicle);
-    icon.style.cssText = 'font-size:18px;line-height:1;';
+    const icon = document.createElement('img');
+    icon.src = vehicleIconUrl(m.vehicle);
+    icon.alt = m.vehicle ?? 'courier';
+    icon.style.cssText = 'width:24px;height:24px;display:block;filter:brightness(0) invert(1);';
     chip.appendChild(icon);
 
     if (m.pulse) {
@@ -196,8 +194,8 @@ export function MapView({
         // Mettre à jour l'émoji véhicule si le courier change de véhicule
         if (m.kind === 'courier') {
           const el = existing.getElement();
-          const icon = el.querySelector('span');
-          if (icon) icon.textContent = vehicleEmoji(m.vehicle);
+          const icon = el.querySelector('img') as HTMLImageElement | null;
+          if (icon) icon.src = vehicleIconUrl(m.vehicle);
         }
         return;
       }

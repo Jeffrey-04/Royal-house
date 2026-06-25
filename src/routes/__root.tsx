@@ -9,7 +9,8 @@ import {
 } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 
-import appCss from "../styles.css?url";
+import appCss  from "../styles.css?url";
+import logoUrl from "../assets/logo.png?url";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -87,6 +88,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" },
       { rel: "stylesheet", href: "https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" },
       { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: logoUrl, type: "image/png" },
+      { rel: "apple-touch-icon", href: logoUrl },
     ],
   }),
   shellComponent: RootShell,
