@@ -437,287 +437,424 @@ function RestaurantHistory() {
 }
 
 // ============ MENU MANAGEMENT ============
+
+type MenuItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  category: string | null;
+  image_url: string | null;
+  components: Array<{ name: string; price: number }> | null;
+  available: boolean;
+};
+
 function MenuManager() {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState<any | null>(null);
+  const [editing, setEditing] = useState<MenuItem | null>(null);
   const [showForm, setShowForm] = useState(false);
 
-  const { data: items } = useQuery({
+  const { data: items = [] } = useQuery<MenuItem[]>({
     queryKey: ["menu-admin", ROYAL_HOUSE_ID],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("menu_items")
-        .select("*")
+      const { data, error } = await supabase
+        .from("menu_items" as any)
+        .select("id, name, description, price, category, image_url, components, available")
         .eq("restaurant_id", ROYAL_HOUSE_ID)
         .order("sort_order");
       if (error) throw error;
-      return (data ?? []) as any[];
+      return (data ?? []) as unknown as MenuItem[];
     },
   });
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["menu-admin", ROYAL_HOUSE_ID] });
 
-  const toggleAvail = async (item: any) => {
-    const { error } = await (supabase as any).from("menu_items").update({ available: !item.available }).eq("id", item.id);
-    if (error) return toast.error(error.message);
+  const toggleAvail = async (item: MenuItem) => {
+    const { error } = await supabase
+      .from("menu_items" as any)
+      .update({ available: !item.available })
+      .eq("id", item.id);
+    if (error) { toast.error(error.message); return; }
     refresh();
   };
 
   const remove = async (id: string) => {
     if (!confirm("Supprimer ce plat ?")) return;
-    const { error } = await (supabase as any).from("menu_items").delete().eq("id", id);
-    if (error) return toast.error(error.message);
+    const { error } = await supabase.from("menu_items" as any).delete().eq("id", id);
+    if (error) { toast.error(error.message); return; }
     toast.success("Plat supprimé");
     refresh();
   };
 
+  const openNew  = () => { setEditing(null);  setShowForm(true); };
+  const openEdit = (item: MenuItem) => { setEditing(item); setShowForm(true); };
+  const closeForm = () => { setShowForm(false); setEditing(null); };
+
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-4">
+    <div className="max-w-3xl mx-auto p-6 space-y-5">
+
+      {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Menu du restaurant</h2>
           <p className="text-sm text-muted-foreground">Gérez les plats proposés à vos clients.</p>
         </div>
-        <Button onClick={() => { setEditing(null); setShowForm(true); }}>
-          <Plus className="mr-2 h-4 w-4" /> Nouveau plat
+        <Button onClick={openNew}>
+          <Plus className="h-4 w-4 mr-2" />Nouveau plat
         </Button>
       </div>
 
+      {/* Formulaire de création / édition */}
       {showForm && (
         <MenuItemForm
+          key={editing?.id ?? "new"}
           initial={editing}
-          onClose={() => { setShowForm(false); setEditing(null); }}
-          onSaved={() => { setShowForm(false); setEditing(null); refresh(); }}
+          onClose={closeForm}
+          onSaved={() => { closeForm(); refresh(); }}
         />
       )}
 
-      <div className="space-y-2">
-        {(items ?? []).length === 0 && !showForm && (
-          <div className="text-center text-sm text-muted-foreground border border-dashed rounded-xl p-8">
-            Aucun plat. Cliquez sur « Nouveau plat » pour commencer.
-          </div>
-        )}
-        {(items ?? []).map((item) => (
-          <div key={item.id} className="flex items-center gap-3 rounded-xl border bg-background p-4">
-            {item.image_url ? (
-            <img src={item.image_url} alt={item.name} className="w-16 h-12 rounded-lg object-cover shrink-0" />
-          ) : (
-            <div className="w-16 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0 text-xl">🍽️</div>
-          )}
-            <div className="flex-1 min-w-0">
-              <div className="font-medium">{item.name}</div>
-              {item.description && <div className="text-xs text-muted-foreground line-clamp-1">{item.description}</div>}
-              <div className="text-xs mt-1 flex gap-2 items-center">
-                <span className="font-semibold text-primary">{formatFCFA(Number(item.price))}</span>
-                {item.category && <Badge variant="secondary" className="text-xs">{item.category}</Badge>}
+      {/* Liste des plats */}
+      {items.length === 0 && !showForm ? (
+        <div className="text-center text-sm text-muted-foreground border border-dashed rounded-xl p-10">
+          Aucun plat pour l'instant. Cliquez sur « Nouveau plat » pour commencer.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-3 rounded-xl border bg-background p-3"
+            >
+              {/* Miniature */}
+              {item.image_url ? (
+                <img
+                  src={item.image_url}
+                  alt={item.name}
+                  className="w-16 h-12 rounded-lg object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0 text-2xl">
+                  🍽️
+                </div>
+              )}
+
+              {/* Infos */}
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm truncate">{item.name}</p>
+                {item.description && (
+                  <p className="text-xs text-muted-foreground line-clamp-1">{item.description}</p>
+                )}
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-xs font-bold text-primary">{formatFCFA(Number(item.price))}</span>
+                  {item.category && (
+                    <Badge variant="secondary" className="text-xs py-0">{item.category}</Badge>
+                  )}
+                  {Array.isArray(item.components) && item.components.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      · {item.components.length} supplément{item.components.length > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <Switch
+                    checked={item.available}
+                    onCheckedChange={() => toggleAvail(item)}
+                  />
+                  <span className="text-xs text-muted-foreground w-12">
+                    {item.available ? "Dispo" : "Indispo"}
+                  </span>
+                </div>
+                <Button size="icon" variant="ghost" onClick={() => openEdit(item)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => remove(item.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 text-xs">
-                <Switch checked={item.available} onCheckedChange={() => toggleAvail(item)} />
-                <span className="text-muted-foreground">{item.available ? "Dispo" : "Indispo"}</span>
-              </div>
-              <Button size="icon" variant="ghost" onClick={() => { setEditing(item); setShowForm(true); }}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="ghost" onClick={() => remove(item.id)}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-type MenuComponent = { name: string; price: number };
+// ============ FORMULAIRE PLAT ============
 
-function MenuItemForm({ initial, onClose, onSaved }: { initial: any | null; onClose: () => void; onSaved: () => void }) {
-  const [name, setName]             = useState(initial?.name ?? "");
-  const [description, setDescription] = useState(initial?.description ?? "");
-  const [price, setPrice]           = useState(String(initial?.price ?? ""));
-  const [category, setCategory]     = useState(initial?.category ?? "Plats signatures");
-  const [imageUrl, setImageUrl]     = useState<string>(initial?.image_url ?? "");
-  const [uploading, setUploading]   = useState(false);
-  const [components, setComponents] = useState<MenuComponent[]>(
-    Array.isArray(initial?.components) ? initial.components : []
-  );
-  const [busy, setBusy] = useState(false);
+type MenuSupp = { name: string; price: number };
+
+function MenuItemForm({
+  initial,
+  onClose,
+  onSaved,
+}: {
+  initial: MenuItem | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [name,        setName]        = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [price,       setPrice]       = useState(String(initial?.price ?? ""));
+  const [category,    setCategory]    = useState(initial?.category ?? "Plats signatures");
+  const [imageUrl,    setImageUrl]    = useState(initial?.image_url ?? "");
+  const [uploading,   setUploading]   = useState(false);
+  const [supps,       setSupps]       = useState<MenuSupp[]>(
+    Array.isArray(initial?.components) ? (initial.components as MenuSupp[]) : []
+  );
+  const [busy, setBusy] = useState(false);
+
+  /* ── Upload photo ── */
+  const pickFile = () => fileRef.current?.click();
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
       const ext  = file.name.split(".").pop() ?? "jpg";
       const path = `${ROYAL_HOUSE_ID}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from("menu-images").upload(path, file, { upsert: true });
+      const { error: upErr } = await supabase.storage
+        .from("menu-images")
+        .upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const { data } = supabase.storage.from("menu-images").getPublicUrl(path);
       setImageUrl(data.publicUrl);
     } catch (err: any) {
-      toast.error("Upload échoué : " + err.message);
+      toast.error("Échec de l'upload : " + (err.message ?? "erreur inconnue"));
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
   };
 
-  const addComponent    = () => setComponents(p => [...p, { name: "", price: 0 }]);
-  const updateComponent = (i: number, field: keyof MenuComponent, val: string | number) =>
-    setComponents(p => p.map((c, idx) => idx === i ? { ...c, [field]: val } : c));
-  const removeComponent = (i: number) => setComponents(p => p.filter((_, idx) => idx !== i));
+  /* ── Suppléments ── */
+  const addSupp    = () => setSupps(s => [...s, { name: "", price: 0 }]);
+  const updateSupp = (i: number, field: keyof MenuSupp, val: string | number) =>
+    setSupps(s => s.map((x, j) => j === i ? { ...x, [field]: val } : x));
+  const removeSupp = (i: number) =>
+    setSupps(s => s.filter((_, j) => j !== i));
 
-  const save = async (e: React.FormEvent) => {
+  /* ── Sauvegarde ── */
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!name.trim()) { toast.error("Le nom du plat est obligatoire."); return; }
+    if (!price || Number(price) <= 0) { toast.error("Le prix doit être supérieur à 0."); return; }
+
     setBusy(true);
     try {
       const payload = {
         restaurant_id: ROYAL_HOUSE_ID,
-        name,
-        description: description || null,
-        price: Number(price) || 0,
-        category: category || null,
-        image_url: imageUrl || null,
-        emoji: null,
-        components: components.filter(c => c.name.trim()),
+        name:          name.trim(),
+        description:   description.trim() || null,
+        price:         Number(price),
+        category:      category.trim() || null,
+        image_url:     imageUrl || null,
+        components:    supps.filter(s => s.name.trim()),
       };
+
       const { error } = initial
-        ? await (supabase as any).from("menu_items").update(payload).eq("id", initial.id)
-        : await (supabase as any).from("menu_items").insert(payload);
+        ? await supabase.from("menu_items" as any).update(payload).eq("id", initial.id)
+        : await supabase.from("menu_items" as any).insert(payload);
+
       if (error) throw error;
-      toast.success(initial ? "Plat mis à jour" : "Plat ajouté");
+      toast.success(initial ? "Plat mis à jour ✓" : "Plat ajouté ✓");
       onSaved();
     } catch (err: any) {
-      toast.error(err.message ?? "Erreur");
+      toast.error(err.message ?? "Une erreur est survenue");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <form onSubmit={save} className="rounded-xl border bg-card p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold">{initial ? "Modifier le plat" : "Nouveau plat"}</h3>
-        <Button type="button" variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-2xl border bg-card shadow-sm overflow-hidden"
+    >
+      {/* Barre de titre */}
+      <div className="flex items-center justify-between px-5 py-4 border-b">
+        <h3 className="font-semibold text-base">
+          {initial ? "Modifier le plat" : "Nouveau plat"}
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
-      {/* Image upload */}
-      <div className="space-y-1.5">
-        <Label className="text-xs">Photo du plat</Label>
-        <div
-          onClick={() => fileRef.current?.click()}
-          className="relative cursor-pointer rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/30 hover:bg-muted/50 transition-colors overflow-hidden"
-          style={{ height: 160 }}
-        >
-          {imageUrl ? (
-            <>
-              <img src={imageUrl} alt="Aperçu" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                <span className="text-white text-sm font-medium">Changer la photo</span>
+      <div className="p-5 space-y-5">
+
+        {/* ── Zone photo ── */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Photo du plat</label>
+          <div
+            onClick={pickFile}
+            className={`relative w-full rounded-xl border-2 border-dashed transition-colors cursor-pointer overflow-hidden
+              ${uploading ? "border-primary/40 bg-primary/5" : "border-muted-foreground/20 bg-muted/30 hover:bg-muted/60 hover:border-primary/40"}`}
+            style={{ height: 180 }}
+          >
+            {imageUrl ? (
+              <>
+                <img
+                  src={imageUrl}
+                  alt="Aperçu"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                  <ImagePlus className="h-6 w-6 text-white" />
+                  <span className="text-white text-sm font-medium">Changer la photo</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-2 select-none">
+                {uploading
+                  ? <Loader2 className="h-9 w-9 text-primary animate-spin" />
+                  : <ImagePlus className="h-9 w-9 text-muted-foreground/60" />
+                }
+                <p className="text-sm text-muted-foreground">
+                  {uploading ? "Upload en cours…" : "Cliquez pour ajouter une photo"}
+                </p>
+                <p className="text-xs text-muted-foreground/60">JPG · PNG · WebP — max 5 Mo</p>
               </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground">
-              {uploading ? <Loader2 className="h-8 w-8 animate-spin" /> : <ImagePlus className="h-8 w-8" />}
-              <span className="text-sm">{uploading ? "Upload en cours…" : "Cliquer pour ajouter une photo"}</span>
-              <span className="text-xs">JPG, PNG, WebP · max 5 Mo</span>
-            </div>
+            )}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={onFileChange}
+            disabled={uploading}
+          />
+          {imageUrl && (
+            <button
+              type="button"
+              onClick={() => setImageUrl("")}
+              className="text-xs text-destructive hover:underline"
+            >
+              Supprimer la photo
+            </button>
           )}
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={handleImageUpload}
-          disabled={uploading}
-        />
-        {imageUrl && (
-          <button
-            type="button"
-            onClick={() => setImageUrl("")}
-            className="text-xs text-destructive hover:underline"
-          >
-            Supprimer la photo
-          </button>
-        )}
-      </div>
 
-      {/* Nom */}
-      <div className="space-y-1">
-        <Label className="text-xs">Nom du plat *</Label>
-        <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Ndolé Royal" />
-      </div>
-
-      {/* Description */}
-      <div className="space-y-1">
-        <Label className="text-xs">Description</Label>
-        <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="Ingrédients, accompagnements…" />
-      </div>
-
-      {/* Prix + Catégorie */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Prix (FCFA) *</Label>
-          <Input type="number" step="100" min="0" required value={price} onChange={(e) => setPrice(e.target.value)} />
+        {/* ── Nom ── */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Nom du plat *</label>
+          <Input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Ex : Ndolé Royal, Poulet DG…"
+            required
+          />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Catégorie</Label>
-          <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Plats signatures, Boissons…" />
-        </div>
-      </div>
 
-      {/* Composants / Suppléments */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs">Suppléments disponibles</Label>
-          <button
-            type="button"
-            onClick={addComponent}
-            className="text-xs text-primary flex items-center gap-1 hover:underline"
-          >
-            <Plus className="h-3 w-3" />Ajouter
-          </button>
+        {/* ── Description ── */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Description</label>
+          <Textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="Ingrédients, accompagnements, allergènes…"
+            rows={2}
+          />
         </div>
-        {components.length === 0 && (
-          <p className="text-xs text-muted-foreground italic">
-            Aucun supplément. Ex : Plantain extra, Miondo, Poisson supplémentaire…
-          </p>
-        )}
-        {components.map((comp, i) => (
-          <div key={i} className="flex gap-2 items-center">
-            <Input
-              value={comp.name}
-              onChange={(e) => updateComponent(i, "name", e.target.value)}
-              placeholder="Nom du supplément"
-              className="flex-1 h-8 text-sm"
-            />
+
+        {/* ── Prix + Catégorie ── */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Prix (FCFA) *</label>
             <Input
               type="number"
               min="0"
               step="100"
-              value={comp.price}
-              onChange={(e) => updateComponent(i, "price", Number(e.target.value))}
-              placeholder="Prix FCFA"
-              className="w-28 h-8 text-sm"
+              value={price}
+              onChange={e => setPrice(e.target.value)}
+              placeholder="3 500"
+              required
             />
-            <button type="button" onClick={() => removeComponent(i)} className="text-destructive hover:opacity-70">
-              <X className="h-4 w-4" />
-            </button>
           </div>
-        ))}
-        {components.length > 0 && (
-          <p className="text-xs text-muted-foreground">Prix = 0 FCFA → supplément gratuit</p>
-        )}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Catégorie</label>
+            <Input
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              placeholder="Plats signatures, Boissons…"
+            />
+          </div>
+        </div>
+
+        {/* ── Suppléments ── */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Suppléments</p>
+              <p className="text-xs text-muted-foreground">
+                Extras que le client peut ajouter à ce plat
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={addSupp}>
+              <Plus className="h-3.5 w-3.5 mr-1" />Ajouter
+            </Button>
+          </div>
+
+          {supps.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground">
+              Pas de supplément — ex : Plantain extra (500 FCFA), Miondo (300 FCFA)
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {supps.map((s, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input
+                    value={s.name}
+                    onChange={e => updateSupp(i, "name", e.target.value)}
+                    placeholder="Nom du supplément"
+                    className="flex-1 h-9"
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={s.price}
+                    onChange={e => updateSupp(i, "price", Number(e.target.value))}
+                    placeholder="Prix"
+                    className="w-28 h-9"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSupp(i)}
+                    className="h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground">Mettre 0 pour un supplément gratuit.</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="flex gap-2 justify-end pt-2">
-        <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
+      {/* Pied de formulaire */}
+      <div className="flex items-center justify-end gap-2 px-5 py-4 border-t bg-muted/20">
+        <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+          Annuler
+        </Button>
         <Button type="submit" disabled={busy || uploading}>
-          {busy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-          {busy ? "Enregistrement…" : "Enregistrer"}
+          {busy
+            ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Enregistrement…</>
+            : initial ? "Mettre à jour" : "Ajouter le plat"
+          }
         </Button>
       </div>
     </form>
