@@ -28,6 +28,7 @@ interface MapViewProps {
   onMarkerClick?: (id: string) => void;
   selectedId?: string | null;
   className?: string;
+  rounded?: boolean;
 }
 
 const BRAND = "oklch(0.65 0.21 25)";
@@ -132,6 +133,7 @@ export function MapView({
   onMarkerClick,
   selectedId,
   className,
+  rounded = true,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -167,6 +169,16 @@ export function MapView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // Redimensionne Mapbox automatiquement quand le conteneur change de taille
+  useEffect(() => {
+    const map = mapRef.current;
+    const container = containerRef.current;
+    if (!map || !container) return;
+    const observer = new ResizeObserver(() => map.resize());
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [ready]);
 
   // Markers
   useEffect(() => {
@@ -291,7 +303,7 @@ export function MapView({
   return (
     <div className={className ?? "h-full w-full"}>
       <style>{`@keyframes pingScale {0%{transform:scale(.8);opacity:.7}100%{transform:scale(2);opacity:0}}`}</style>
-      <div ref={containerRef} className="h-full w-full rounded-2xl overflow-hidden" />
+      <div ref={containerRef} className={`h-full w-full ${rounded ? "rounded-2xl overflow-hidden" : ""}`} />
     </div>
   );
 }

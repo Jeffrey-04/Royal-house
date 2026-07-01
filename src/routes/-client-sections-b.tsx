@@ -407,6 +407,7 @@ export function SectionSuivi({ userId }: { userId: string }) {
           fitToMarkers={!route}
           routeLine={route?.coords}
           className="absolute inset-0"
+          rounded={!fullscreen}
         />
 
         {/* Bouton plein écran (mobile uniquement) */}

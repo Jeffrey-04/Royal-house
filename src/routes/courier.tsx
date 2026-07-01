@@ -675,6 +675,7 @@ function SectionLive({ userId }: { userId: string }) {
           routeLine={route?.coords}
           onMarkerClick={(id) => setSelected(id.replace(/^(pickup|drop|me)-/, ""))}
           className={fullscreen ? "absolute inset-0" : "absolute inset-4"}
+          rounded={!fullscreen}
         />
 
         {/* Bouton plein écran (mobile uniquement) */}
