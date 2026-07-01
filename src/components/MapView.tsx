@@ -170,15 +170,16 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Redimensionne Mapbox automatiquement quand le conteneur change de taille
+  // Redimensionne Mapbox automatiquement quand le conteneur change de taille (resize fenêtre, etc.)
   useEffect(() => {
-    const map = mapRef.current;
     const container = containerRef.current;
-    if (!map || !container) return;
-    const observer = new ResizeObserver(() => map.resize());
+    if (!container) return;
+    const observer = new ResizeObserver(() => {
+      mapRef.current?.resize();
+    });
     observer.observe(container);
     return () => observer.disconnect();
-  }, [ready]);
+  }, []);
 
   // Markers
   useEffect(() => {

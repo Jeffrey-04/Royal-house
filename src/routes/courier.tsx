@@ -670,6 +670,7 @@ function SectionLive({ userId }: { userId: string }) {
         : "relative min-h-[320px] lg:min-h-0 p-4 pb-28 md:pb-4"
       }>
         <MapView
+          key={fullscreen ? "fs" : "normal"}
           markers={markers}
           fitToMarkers={!route && markers.length > 0}
           routeLine={route?.coords}

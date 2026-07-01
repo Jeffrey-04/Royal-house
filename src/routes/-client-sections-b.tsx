@@ -403,6 +403,7 @@ export function SectionSuivi({ userId }: { userId: string }) {
         : "flex-1 min-h-64 lg:min-h-0 relative"
       }>
         <MapView
+          key={fullscreen ? "fs" : "normal"}
           markers={markers}
           fitToMarkers={!route}
           routeLine={route?.coords}
