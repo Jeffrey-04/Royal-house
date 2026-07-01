@@ -7,6 +7,7 @@ import {
   LayoutDashboard, TrendingUp, Receipt, CheckCircle2, Wallet,
   User, LogOut, Crown, Loader2, ChevronRight,
   Navigation, ArrowLeft, ArrowRight, ArrowUp, CornerDownLeft, Flag,
+  Maximize2, Minimize2,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -441,6 +442,7 @@ function SectionLive({ userId }: { userId: string }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [route, setRoute] = useState<RouteData | null>(null);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const watchRef = useRef<number | null>(null);
 
   const { data: profile } = useQuery({
@@ -654,19 +656,90 @@ function SectionLive({ userId }: { userId: string }) {
     toast.success("Livraison terminée !");
   };
 
+  // Bloquer le scroll body en mode plein écran
+  useEffect(() => {
+    document.body.style.overflow = fullscreen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [fullscreen]);
+
   return (
     <div className="flex-1 h-full grid lg:grid-cols-[1fr_420px]">
-      <div className="relative min-h-[320px] lg:min-h-0 p-4 pb-28 md:pb-4">
+      {/* Map container */}
+      <div className={fullscreen
+        ? "fixed inset-0 z-[100]"
+        : "relative min-h-[320px] lg:min-h-0 p-4 pb-28 md:pb-4"
+      }>
         <MapView
           markers={markers}
           fitToMarkers={!route && markers.length > 0}
           routeLine={route?.coords}
           onMarkerClick={(id) => setSelected(id.replace(/^(pickup|drop|me)-/, ""))}
-          className="absolute inset-4"
+          className={fullscreen ? "absolute inset-0" : "absolute inset-4"}
         />
+
+        {/* Bouton plein écran (mobile uniquement) */}
+        <button
+          onClick={() => setFullscreen(f => !f)}
+          className="lg:hidden absolute top-4 right-4 z-10 h-10 w-10 rounded-xl bg-background/85 backdrop-blur border shadow-md flex items-center justify-center hover:bg-background transition-colors"
+          aria-label={fullscreen ? "Réduire" : "Plein écran"}
+        >
+          {fullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+        </button>
+
+        {/* Overlay flottant en plein écran */}
+        {fullscreen && (
+          <div className="absolute bottom-6 left-3 right-3 z-10">
+            {selectedOrder ? (
+              <div className="bg-card/92 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate">{(selectedOrder as any).restaurants?.name ?? "Commande"}</p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
+                      <MapPin className="h-3 w-3 shrink-0" />{(selectedOrder as any).dropoff_address}
+                    </p>
+                  </div>
+                  {route && (
+                    <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                      <Navigation className="h-3 w-3" />{formatDuration(route.durationS)}
+                    </span>
+                  )}
+                </div>
+                {/* Bouton action principal */}
+                {(selectedOrder as any).courier_id !== userId && (
+                  <Button className="w-full" size="sm"
+                    onClick={() => { acceptOrder((selectedOrder as any).id, (selectedOrder as any).pickup_lat, (selectedOrder as any).pickup_lng); setFullscreen(false); }}>
+                    Accepter la course
+                  </Button>
+                )}
+                {(selectedOrder as any).courier_id === userId && (selectedOrder as any).status === "picked_up" && (
+                  <Button className="w-full" size="sm" onClick={() => startDelivery((selectedOrder as any).id)}>
+                    Démarrer la livraison
+                  </Button>
+                )}
+                {(selectedOrder as any).courier_id === userId && (selectedOrder as any).status === "delivering" && (
+                  <Button className="w-full bg-green-600 hover:bg-green-700 text-white" size="sm"
+                    onClick={() => finishDelivery((selectedOrder as any).id)}>
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Livraison terminée
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="bg-card/92 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-3 shadow-2xl flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  {available.length} course{available.length !== 1 ? "s" : ""} disponible{available.length !== 1 ? "s" : ""}
+                  {myOrders.length > 0 && ` · ${myOrders.length} en cours`}
+                </span>
+                <button onClick={() => setFullscreen(false)} className="text-xs text-primary font-semibold">
+                  Voir →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <aside className="border-l bg-card flex flex-col overflow-hidden">
+      {/* Aside — masqué en plein écran */}
+      <aside className={`border-l bg-card flex flex-col overflow-hidden ${fullscreen ? "hidden lg:flex" : ""}`}>
         <div className="p-4 border-b">
           <h2 className="font-bold flex items-center gap-2">
             <Bike className="h-4 w-4 text-primary" />Mes courses

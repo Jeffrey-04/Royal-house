@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Clock, CheckCircle2, Bike, ChefHat, Package,
   MapPin, Receipt, X, ShoppingBag, Navigation,
   ChevronLeft, ChevronRight, PartyPopper, Loader2,
+  Maximize2, Minimize2, WifiOff,
 } from "lucide-react";
 import { fetchRoute, formatDist, formatDuration, type RouteData } from "@/lib/mapbox";
 import { supabase } from "@/integrations/supabase/client";
@@ -235,6 +236,8 @@ export function SectionSuivi({ userId }: { userId: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [route, setRoute] = useState<RouteData | null>(null);
   const [confirmingReceived, setConfirmingReceived] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const lastCourierLoc = useRef<{ lat: number; lng: number } | null>(null);
 
   async function markReceived(orderId: string) {
     setConfirmingReceived(true);
@@ -306,6 +309,17 @@ export function SectionSuivi({ userId }: { userId: string }) {
     },
   });
 
+  // Mémoriser la dernière position connue du livreur (résistance aux coupures réseau)
+  useEffect(() => {
+    if (courierLoc) lastCourierLoc.current = courierLoc;
+  }, [courierLoc]);
+
+  // Bloquer le scroll body en mode plein écran
+  useEffect(() => {
+    document.body.style.overflow = fullscreen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [fullscreen]);
+
   useEffect(() => {
     const ch = supabase
       .channel(`client-active-rt-${userId}`)
@@ -325,17 +339,22 @@ export function SectionSuivi({ userId }: { userId: string }) {
     };
   }, [userId, queryClient]);
 
-  // Calcul itinéraire : depuis la position du livreur (ou restaurant si pas encore en route) → client
+  // Calcul itinéraire : depuis la position du livreur (ou dernière connue) → client
   useEffect(() => {
-    setRoute(null);
     const toLng = activeOrder?.dropoff_lng;
     const toLat = activeOrder?.dropoff_lat;
-    if (!toLng || !toLat || !Number.isFinite(Number(toLng)) || !Number.isFinite(Number(toLat))) return;
+    if (!toLng || !toLat || !Number.isFinite(Number(toLng)) || !Number.isFinite(Number(toLat))) {
+      setRoute(null); return;
+    }
     const status = activeOrder?.status;
-    if (!status || ["pending", "accepted", "preparing", "delivered", "cancelled"].includes(status)) return;
+    if (!status || ["pending", "accepted", "preparing", "delivered", "cancelled"].includes(status)) {
+      setRoute(null); return;
+    }
+    // Utilise la position live ou la dernière position connue (résistance aux coupures)
+    const loc = courierLoc ?? lastCourierLoc.current;
     let fromLng: number, fromLat: number;
-    if (courierLoc?.lng && courierLoc?.lat) {
-      fromLng = courierLoc.lng; fromLat = courierLoc.lat;
+    if (loc?.lng && loc?.lat) {
+      fromLng = loc.lng; fromLat = loc.lat;
     } else if (restaurant?.lng && restaurant?.lat) {
       fromLng = restaurant.lng; fromLat = restaurant.lat;
     } else {
@@ -343,19 +362,19 @@ export function SectionSuivi({ userId }: { userId: string }) {
     }
     fetchRoute(fromLng, fromLat, Number(toLng), Number(toLat)).then(setRoute);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOrder?.id, activeOrder?.status, !!courierLoc]);
+  }, [activeOrder?.id, activeOrder?.status, courierLoc, restaurant]);
 
   const markers = useMemo<MapMarker[]>(() => {
     const result: MapMarker[] = [];
     const isDelivering = activeOrder?.status === "delivering" || activeOrder?.status === "delivered";
-    // Afficher le restaurant seulement avant que le livreur soit en route
     if (!isDelivering && restaurant?.lat && restaurant?.lng)
       result.push({ id: "restaurant", kind: "restaurant", lat: restaurant.lat, lng: restaurant.lng });
     if (activeOrder?.dropoff_lat && activeOrder?.dropoff_lng)
       result.push({ id: "dropoff", kind: "dropoff", lat: activeOrder.dropoff_lat, lng: activeOrder.dropoff_lng });
-    // Position du livreur en priorité quand il est en route
-    if (courierLoc?.lat && courierLoc?.lng)
-      result.push({ id: "courier", kind: "courier", lat: courierLoc.lat, lng: courierLoc.lng, pulse: true });
+    // Utilise la position live OU la dernière position connue (coupure réseau)
+    const loc = courierLoc ?? lastCourierLoc.current;
+    if (loc?.lat && loc?.lng)
+      result.push({ id: "courier", kind: "courier", lat: loc.lat, lng: loc.lng, pulse: !!courierLoc });
     return result;
   }, [restaurant, activeOrder, courierLoc]);
 
@@ -374,25 +393,91 @@ export function SectionSuivi({ userId }: { userId: string }) {
   const hasNext = currentIdx < activeOrders.length - 1;
   const progress = statusProgress(activeOrder.status);
 
+  const isOffline = !courierLoc && !!lastCourierLoc.current && !!activeOrder.courier_id;
+
   return (
     <div className="flex flex-col lg:flex-row overflow-hidden" style={{ height: "calc(100vh - 4rem)" }}>
       {/* Map */}
-      <div className="flex-1 min-h-64 lg:min-h-0 relative">
+      <div className={fullscreen
+        ? "fixed inset-0 z-[100]"
+        : "flex-1 min-h-64 lg:min-h-0 relative"
+      }>
         <MapView
           markers={markers}
           fitToMarkers={!route}
           routeLine={route?.coords}
           className="absolute inset-0"
         />
-        {!activeOrder.courier_id && (
+
+        {/* Bouton plein écran (mobile uniquement) */}
+        <button
+          onClick={() => setFullscreen(f => !f)}
+          className="lg:hidden absolute top-4 right-4 z-10 h-10 w-10 rounded-xl bg-background/85 backdrop-blur border shadow-md flex items-center justify-center hover:bg-background transition-colors"
+          aria-label={fullscreen ? "Réduire" : "Plein écran"}
+        >
+          {fullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+        </button>
+
+        {!activeOrder.courier_id && !fullscreen && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-card border rounded-xl px-4 py-2 text-sm font-medium shadow-md">
             En attente d'un livreur…
           </div>
         )}
+
+        {/* Overlay flottant en plein écran */}
+        {fullscreen && (
+          <div className="absolute bottom-6 left-3 right-3 z-10 space-y-2">
+            {/* Indicateur hors-ligne */}
+            {isOffline && (
+              <div className="flex justify-center">
+                <span className="inline-flex items-center gap-1.5 bg-amber-500 text-white text-xs px-3 py-1.5 rounded-full font-medium shadow-lg">
+                  <WifiOff className="h-3 w-3" /> Dernière position connue
+                </span>
+              </div>
+            )}
+            {!activeOrder.courier_id && (
+              <div className="flex justify-center">
+                <span className="inline-flex items-center gap-1.5 bg-card border text-xs px-3 py-1.5 rounded-full font-medium shadow-md">
+                  En attente d'un livreur…
+                </span>
+              </div>
+            )}
+
+            {/* Card statut + action */}
+            <div className="bg-card/92 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <Badge className={`${STATUS_COLOR[activeOrder.status]} gap-1.5 text-xs`}>
+                  {getStatusIcon(activeOrder.status)}
+                  {STATUS_LABEL[activeOrder.status]}
+                </Badge>
+                {route && (
+                  <span className="text-xs font-medium text-muted-foreground flex items-center gap-1 shrink-0">
+                    <Navigation className="h-3 w-3" />
+                    {formatDuration(route.durationS)} · {formatDist(route.distanceM)}
+                  </span>
+                )}
+              </div>
+
+              {(activeOrder.status === "delivering" ||
+                (activeOrder.status === "delivered" && activeOrder.payment_status !== "released")) && (
+                <Button
+                  size="sm"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={confirmingReceived}
+                  onClick={() => markReceived(activeOrder.id)}
+                >
+                  {confirmingReceived
+                    ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Confirmation…</>
+                    : <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />J'ai reçu ma commande</>}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Status panel */}
-      <div className="w-full lg:w-80 xl:w-96 border-t lg:border-t-0 lg:border-l bg-card overflow-y-auto p-5 space-y-5 shrink-0">
+      {/* Status panel — masqué en plein écran */}
+      <div className={`w-full lg:w-80 xl:w-96 border-t lg:border-t-0 lg:border-l bg-card overflow-y-auto p-5 space-y-5 shrink-0 ${fullscreen ? "hidden" : ""}`}>
 
         {/* Sélecteur de commandes — visible si plusieurs commandes actives */}
         {activeOrders.length > 1 && (
