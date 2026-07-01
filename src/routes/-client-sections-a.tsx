@@ -247,29 +247,31 @@ export function SectionAccueil({ userId, profile, cart, addToCart, updateQty, re
                 const inCart = cart.find(c => c.id === item.id);
                 const hasComponents = (item.components?.length ?? 0) > 0;
                 return (
-                  <div key={item.id} className="rounded-xl border bg-card p-3 flex flex-col gap-2 hover:shadow-sm transition-shadow">
-                    <MenuItemImage imageUrl={item.image_url} name={item.name} className="h-20 rounded-lg" />
-                    <p className="font-medium text-sm leading-tight text-center">{item.name}</p>
-                    <div className="flex items-center justify-between mt-auto">
-                      <span className="text-primary font-bold text-sm">{formatFCFA(item.price)}</span>
-                      {hasComponents ? (
-                        <CustomizeDialog item={item} onAdd={addToCart}>
-                          <button className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
-                            ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}>
+                  <div key={item.id} className="rounded-xl border bg-card overflow-hidden flex flex-col hover:shadow-sm transition-shadow">
+                    <MenuItemImage imageUrl={item.image_url} name={item.name} className="h-32" />
+                    <div className="p-3 flex flex-col gap-2 flex-1">
+                      <p className="font-medium text-sm leading-tight text-center">{item.name}</p>
+                      <div className="flex items-center justify-between mt-auto">
+                        <span className="text-primary font-bold text-sm">{formatFCFA(item.price)}</span>
+                        {hasComponents ? (
+                          <CustomizeDialog item={item} onAdd={addToCart}>
+                            <button className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
+                              ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}>
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </CustomizeDialog>
+                        ) : (
+                          <button
+                            onClick={() => addToCart(item)}
+                            className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
+                              ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}
+                          >
                             <Plus className="h-3.5 w-3.5" />
                           </button>
-                        </CustomizeDialog>
-                      ) : (
-                        <button
-                          onClick={() => addToCart(item)}
-                          className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
-                            ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                        )}
+                      </div>
+                      {inCart && <p className="text-xs text-primary text-center font-medium">× {inCart.qty}</p>}
                     </div>
-                    {inCart && <p className="text-xs text-primary text-center font-medium">× {inCart.qty}</p>}
                   </div>
                 );
               })}
@@ -413,38 +415,40 @@ export function SectionCommander({ userId, search, setSearch, cart, addToCart, u
                 return (
                   <div
                     key={item.id}
-                    className="rounded-2xl border bg-card p-4 flex flex-col gap-2 hover:shadow-md transition-shadow"
+                    className="rounded-2xl border bg-card overflow-hidden flex flex-col hover:shadow-md transition-shadow"
                   >
-                    <MenuItemImage imageUrl={item.image_url} name={item.name} className="h-28 rounded-xl" />
-                    <div className="flex-1">
-                      <p className="font-semibold text-sm leading-tight">{item.name}</p>
-                      {item.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
-                      )}
-                      {hasComponents && (
-                        <p className="text-[10px] text-primary/70 mt-1">+ suppléments disponibles</p>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between mt-auto pt-1">
-                      <span className="text-primary font-bold text-sm">{formatFCFA(item.price)}</span>
-                      {hasComponents ? (
-                        <CustomizeDialog item={item} onAdd={addToCart}>
-                          <button className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
-                            ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}>
+                    <MenuItemImage imageUrl={item.image_url} name={item.name} className="h-44" />
+                    <div className="p-3 flex flex-col gap-2 flex-1">
+                      <div className="flex-1">
+                        <p className="font-semibold text-sm leading-tight">{item.name}</p>
+                        {item.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
+                        )}
+                        {hasComponents && (
+                          <p className="text-[10px] text-primary/70 mt-1">+ suppléments disponibles</p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-auto pt-1">
+                        <span className="text-primary font-bold text-sm">{formatFCFA(item.price)}</span>
+                        {hasComponents ? (
+                          <CustomizeDialog item={item} onAdd={addToCart}>
+                            <button className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
+                              ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}>
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </CustomizeDialog>
+                        ) : (
+                          <button
+                            onClick={() => addToCart(item)}
+                            className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
+                              ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}
+                          >
                             <Plus className="h-4 w-4" />
                           </button>
-                        </CustomizeDialog>
-                      ) : (
-                        <button
-                          onClick={() => addToCart(item)}
-                          className={`h-7 w-7 rounded-full flex items-center justify-center transition-colors
-                            ${inCart ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"}`}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      )}
+                        )}
+                      </div>
+                      {inCart && <p className="text-xs text-primary font-medium">× {inCart.qty} dans le panier</p>}
                     </div>
-                    {inCart && <p className="text-xs text-primary font-medium">× {inCart.qty} dans le panier</p>}
                   </div>
                 );
               })}
